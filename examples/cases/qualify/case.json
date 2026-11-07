@@ -1,0 +1,8 @@
+{
+  "name": "qualify_latest_row",
+  "sql": "SELECT id, ts, amt FROM orders QUALIFY ROW_NUMBER() OVER (PARTITION BY id ORDER BY ts DESC) = 1",
+  "tables": {"orders": {"csv": "orders.csv", "schema": "id int, ts timestamp, amt double"}},
+  "expected": "expected.csv",
+  "expected_schema": "id int, ts timestamp, amt double",
+  "_note": "Expected values worked out by hand for this example. For a real case, export them from your own Snowflake account."
+}

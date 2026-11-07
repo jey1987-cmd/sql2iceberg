@@ -1,0 +1,8 @@
+{
+  "name": "dateadd_keeps_time",
+  "sql": "SELECT id, DATEADD(day, 7, ts) AS d7 FROM orders",
+  "tables": {"orders": {"csv": "orders.csv", "schema": "id int, ts timestamp, amt double"}},
+  "expected": "expected.csv",
+  "expected_schema": "id int, d7 timestamp",
+  "_note": "Expected values follow Snowflake's documented behavior (DATEADD keeps the timestamp); confirm on your own account. This case is meant to FAIL on Spark 3.5 because DATE_ADD returns a DATE."
+}
