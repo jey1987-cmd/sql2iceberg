@@ -34,6 +34,8 @@ class Verification:
 def make_spark(iceberg: bool = False, warehouse: str | None = None):
     from pyspark.sql import SparkSession
 
+    # A stray SPARK_HOME points PySpark at a different Spark than the pip package (py4j "does not exist in the JVM").
+    os.environ.pop("SPARK_HOME", None)
     builder = (
         SparkSession.builder.master("local[2]")
         .appName("sf2iceberg-verify")
