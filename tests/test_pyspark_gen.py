@@ -109,3 +109,33 @@ def test_gcs_warehouse_uses_gcs_fileio_and_env_token():
     compile(script, "p.py", "exec")
     assert "GCSFileIO" in script and "os.environ['GCS_OAUTH_TOKEN']" in script
     assert "ya29" not in script
+
+
+def test_cli_pyspark_accepts_documented_flags(tmp_path):
+    """The README quick start command must keep working (jdbc catalog, S3, region, local jars)."""
+    from sql2iceberg.cli import main
+
+    sql = tmp_path / "q.sql"
+    sql.write_text("CREATE OR REPLACE TABLE t AS SELECT a FROM src_tbl;")
+    out = tmp_path / "out"
+    rc = main(["pyspark", str(sql), "--out", str(out), "--platform", "snowflake",
+               "--jdbc-url", "jdbc:snowflake://x.snowflakecomputing.com/", "--catalog-type", "jdbc",
+               "--catalog-uri", "jdbc:sqlite:catalog.db", "--warehouse", "s3://bkt/wh", "--namespace", "live",
+               "--iceberg-version", "2", "--region", "eu-west-1", "--jars", "a.jar,b.jar", "--no-maven"])
+    assert rc == 0
+    text = (out / "pipeline_pyspark.py").read_text()
+    compile(text, "p.py", "exec")
+    assert "JdbcCatalog" in text and "eu-west-1" in text and "a.jar,b.jar" in text and "jars.packages" not in text
+    assert "lake.live.t" in text and "'src_tbl'" in text
+
+
+def test_cli_pyspark_gcs_flags(tmp_path):
+    from sql2iceberg.cli import main
+
+    sql = tmp_path / "q.sql"
+    sql.write_text("CREATE TABLE t AS SELECT a FROM s;")
+    assert main(["pyspark", str(sql), "--out", str(tmp_path / "o"), "--platform", "snowflake", "--jdbc-url", "jdbc:x",
+                 "--catalog-type", "jdbc", "--catalog-uri", "jdbc:sqlite:c.db", "--warehouse", "gs://b/wh",
+                 "--gcs-project", "p1", "--gcs-token-from-env"]) == 0
+    text = (tmp_path / "o" / "pipeline_pyspark.py").read_text()
+    assert "GCSFileIO" in text and "os.environ['GCS_OAUTH_TOKEN']" in text

@@ -50,14 +50,22 @@ def _main(argv: list[str]) -> int:
     pg.add_argument("--platform", help="source platform (default: detected from the code)")
     pg.add_argument("--catalog", default="lake")
     pg.add_argument("--namespace", default="db")
-    pg.add_argument("--catalog-type", default="hadoop", choices=("hadoop", "glue", "rest", "hive"))
+    pg.add_argument("--catalog-type", default="hadoop", choices=("hadoop", "jdbc", "glue", "rest", "hive"),
+                    help="use jdbc (a SQLite or JDBC database as catalog) or glue, not hadoop, on S3/GCS")
     pg.add_argument("--warehouse", default="./warehouse", help="path or s3://bucket/prefix")
     pg.add_argument("--catalog-uri", default="")
     pg.add_argument("--jdbc-url", default="", help="default: built from the platform's environment variables")
     pg.add_argument("--source-schema", default="")
     pg.add_argument("--iceberg-version", type=int, default=2, choices=(2, 3))
+    pg.add_argument("--region", default="us-east-2", help="S3 region when the warehouse is s3://")
+    pg.add_argument("--jars", default="", help="comma-separated local jars (offline machines); pair with --no-maven")
+    pg.add_argument("--no-maven", action="store_true", help="do not add Iceberg/JDBC Maven packages (use with --jars)")
+    pg.add_argument("--jdbc-driver", default="", help="JDBC driver class (default: the platform's)")
+    pg.add_argument("--gcs-project", default="", help="GCP project when the warehouse is gs://")
+    pg.add_argument("--gcs-token-from-env", action="store_true",
+                    help="gs:// only: read GCS_OAUTH_TOKEN and GCS_OAUTH_TOKEN_EXPIRES_AT_MS when the script runs")
     pu = sub.add_parser("publish", help="expose Iceberg tables to snowflake, aws (Glue) or gcp (BigQuery)")
-    pu.add_argument("config", help="JSON file: target, target settings and tables (see docs/publish.md)")
+    pu.add_argument("config", help="JSON file: target, target settings and tables (see docs/examples.md)")
     pu.add_argument("--apply", action="store_true", help="really change the target account (default: print the plan)")
     pu.add_argument("--out", help="write publish_plan.md here")
     c = sub.add_parser("compare", help="compare row counts and estimate cost")
@@ -132,6 +140,9 @@ def _main(argv: list[str]) -> int:
             platform=platform, catalog=args.catalog, namespace=args.namespace, catalog_type=args.catalog_type,
             warehouse=args.warehouse, catalog_uri=args.catalog_uri, jdbc_url=args.jdbc_url,
             source_schema=args.source_schema, format_version=args.iceberg_version,
+            region=args.region, jars=[j for j in args.jars.split(",") if j], jdbc_driver=args.jdbc_driver,
+            gcs_project=args.gcs_project, gcs_token_from_env=args.gcs_token_from_env,
+            **({"iceberg_package": "", "jdbc_package": ""} if args.no_maven else {}),
         )
         stmts = detect_path(args.path, dialect=REGISTRY[platform].sqlglot_dialect)
         script, rep = pyspark_pipeline(stmts, cfg)

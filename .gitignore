@@ -29,3 +29,5 @@ scripts/export_spark.py
 scripts/pyspark_vs_sql.py
 scripts/pyspark_to_s3.py
 scripts/cost_compare.py
+medium-article.md
+medium-article.html

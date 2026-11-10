@@ -3,6 +3,18 @@
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/),
 and the project uses [Semantic Versioning](https://semver.org/). While the version is below 1.0, minor releases may change behaviour.
 
+## [0.1.2] - 2026-11-10
+
+### Fixed
+- `sql2iceberg pyspark --catalog-type jdbc` was rejected ("invalid choice") even though the README and troubleshooting guide
+  recommend it for S3 and GCS warehouses. `jdbc` is now accepted.
+- The `publish` command's help pointed at a docs page that does not exist; it now points at `docs/examples.md`.
+
+### Added
+- `sql2iceberg pyspark` options that were only available from Python: `--region`, `--jars` and `--no-maven` (offline machines),
+  `--jdbc-driver`, `--gcs-project` and `--gcs-token-from-env` (GCS warehouses).
+- Regression tests that run the documented quick-start commands.
+
 ## [0.1.1] - 2026-11-09
 
 Documentation-only release: improves the PyPI project page. No code changes.
@@ -57,5 +69,6 @@ Snowflake, AWS Athena and BigQuery. 38 validation checks across 4 tables and 4 p
 - Validation proves counts, non-null counts and sums, not row-by-row equality.
 - Live tests ran on Windows 10 with Python 3.13 only.
 
+[0.1.2]: https://github.com/jey1987-cmd/sql2iceberg/releases/tag/v0.1.2
 [0.1.1]: https://github.com/jey1987-cmd/sql2iceberg/releases/tag/v0.1.1
 [0.1.0]: https://github.com/jey1987-cmd/sql2iceberg/releases/tag/v0.1.0
