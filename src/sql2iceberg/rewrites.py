@@ -4,7 +4,7 @@ Applied to the Snowflake syntax tree before it is written as Spark SQL (see ``co
 
 * ``LISTAGG`` / ``ARRAY_AGG`` ... ``WITHIN GROUP (ORDER BY ...)``  -> sorted ``collect_list``/``collect_set`` (+ ``array_join``)
 * ``PERCENTILE_CONT(p) WITHIN GROUP (ORDER BY x)``                 -> exact ``percentile(x, p)`` (SQLGlot gives the approximate one)
-* ``DATEDIFF(day|month|quarter|year, a, b)``                       -> boundary counting, as Snowflake does
+* ``DATEDIFF(day|month|quarter|year, a, b)``                       -> boundary counting, as Snowflake and SQL Server do
 * ``ARRAY_SIZE(variant:path)``                                     -> ``size(from_json(...))``
 * ``ARRAY_TO_STRING(array, sep)``                                  -> element-wise cast to string first
 * ``LATERAL FLATTEN(input => col) f``                              -> ``LATERAL VIEW [POS]EXPLODE(from_json(col)) f``
@@ -53,8 +53,12 @@ def _sorted_array(values: exp.Expression, distinct: bool, keys: list[tuple[exp.E
         packed, exp.Lambda(this=exp.Column(this=exp.to_identifier("v"), table=s), expressions=[s])])
 
 
-def spark_semantics(node: exp.Expression) -> exp.Expression:
-    """Expression-level rewrites; use with ``tree.transform``."""
+#: dialects whose DATEDIFF counts the calendar boundaries crossed (Spark counts elapsed time on timestamps)
+BOUNDARY_DATEDIFF_DIALECTS = ("snowflake", "tsql")
+
+
+def spark_semantics(node: exp.Expression, boundary_datediff: bool = True) -> exp.Expression:
+    """Expression-level rewrites; use with ``tree.transform`` (``boundary_datediff``: see BOUNDARY_DATEDIFF_DIALECTS)."""
     if isinstance(node, exp.WithinGroup) and isinstance(node.this, exp.PercentileCont):
         keys = _order_keys(node.args.get("expression"))
         p = node.this.this
@@ -87,7 +91,8 @@ def spark_semantics(node: exp.Expression) -> exp.Expression:
             return exp.ArrayToString(this=as_string_lambda(first.copy()), expression=node.expression.copy())
     if isinstance(node, exp.ArraySize) and isinstance(node.this, (exp.JSONExtract, exp.JSONBExtract)):
         return exp.ArraySize(this=json_array(node.this))
-    if isinstance(node, exp.DateDiff) and node.args.get("unit") is not None and not node.args.get("sql2iceberg_fixed"):
+    if (boundary_datediff and isinstance(node, exp.DateDiff) and node.args.get("unit") is not None
+            and not node.args.get("sql2iceberg_fixed")):
         unit = node.args["unit"].name.upper()
         a, b = node.expression, node.this
         if a is not None and b is not None and unit in ("DAY", "MONTH", "QUARTER", "YEAR"):

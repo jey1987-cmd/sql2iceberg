@@ -3,6 +3,16 @@
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/),
 and the project uses [Semantic Versioning](https://semver.org/). While the version is below 1.0, minor releases may change behaviour.
 
+## [0.2.2] - 2026-11-10
+
+### Fixed (non-Snowflake sources)
+- The rewrites added in 0.2.0 now apply to every source dialect, not only Snowflake: Postgres `STRING_AGG(... ORDER BY ...)`, MySQL
+  `GROUP_CONCAT(... ORDER BY ...)` and Oracle `LISTAGG ... WITHIN GROUP` become a sorted `collect_list` plus `array_join` (they were
+  reported "unsupported"), and `PERCENTILE_CONT ... WITHIN GROUP` becomes the exact `percentile`.
+- SQL Server `DATEDIFF(day|month|quarter|year, ...)` counts calendar boundaries as SQL Server does (Spark counts elapsed time on
+  timestamps). MySQL and other dialects keep their own semantics.
+- Oracle `ROWNUM` is flagged unsupported instead of being passed through to Spark, which has no such column.
+
 ## [0.2.1] - 2026-11-10
 
 ### Fixed

@@ -96,3 +96,34 @@ def test_datediff_counts_boundaries_like_snowflake():
 def test_array_size_of_variant_path_parses_json_first():
     r = convert_statement("SELECT ARRAY_SIZE(p:items) FROM o")
     assert "SIZE(FROM_JSON(GET_JSON_OBJECT(p, '$.items'), 'array<string>'))" in r.spark_sql
+
+
+@pytest.mark.parametrize(
+    "dialect,sql",
+    [
+        ("postgres", "SELECT k, STRING_AGG(v, ',' ORDER BY v) FROM t GROUP BY k"),
+        ("mysql", "SELECT k, GROUP_CONCAT(v ORDER BY v SEPARATOR ',') FROM t GROUP BY k"),
+        ("oracle", "SELECT k, LISTAGG(v, ',') WITHIN GROUP (ORDER BY v) FROM t GROUP BY k"),
+    ],
+)
+def test_ordered_string_aggregation_is_rewritten_for_every_dialect(dialect, sql):
+    r = convert_statement(sql, dialect=dialect)
+    assert r.status == CONVERTED and "WITHIN GROUP" not in r.spark_sql
+    assert "ARRAY_JOIN(TRANSFORM(SORT_ARRAY(COLLECT_LIST(v), TRUE)" in r.spark_sql
+
+
+def test_percentile_cont_is_exact_in_postgres_too():
+    r = convert_statement("SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY x) FROM t", dialect="postgres")
+    assert "PERCENTILE(x, 0.5)" in r.spark_sql and "APPROX" not in r.spark_sql
+
+
+def test_datediff_counts_boundaries_for_sql_server_but_not_for_mysql():
+    tsql = convert_statement("SELECT DATEDIFF(day, a, b) FROM t", dialect="tsql").spark_sql
+    assert "CAST(a AS DATE)" in tsql or "CAST(CAST(a AS TIMESTAMP) AS DATE)" in tsql
+    mysql = convert_statement("SELECT DATEDIFF(b, a) FROM t", dialect="mysql").spark_sql
+    assert "DATE_TRUNC" not in mysql
+
+
+def test_oracle_rownum_is_flagged_unsupported():
+    r = convert_statement("SELECT a FROM t WHERE ROWNUM <= 10", dialect="oracle")
+    assert r.status == UNSUPPORTED and "ROWNUM" in codes(r)

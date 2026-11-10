@@ -14,7 +14,7 @@ import sqlglot
 from sqlglot import ErrorLevel, exp
 from sqlglot.errors import ParseError
 
-from .rewrites import flatten_to_lateral_view, spark_semantics
+from .rewrites import BOUNDARY_DATEDIFF_DIALECTS, flatten_to_lateral_view, spark_semantics
 
 # status values
 CONVERTED = "converted"          # no known problems found (still needs verification)
@@ -57,6 +57,8 @@ _OUTPUT_RULES = [
     (re.compile(r"\bGET_PATH\s*\(", re.IGNORECASE), "GET_PATH",
      ("VARIANT path access stayed as GET_PATH, which Spark does not have. Use get_json_object on a JSON string "
       "or struct field access.")),
+    (re.compile(r"\bROWNUM\b", re.IGNORECASE), "ROWNUM",
+     "Oracle ROWNUM has no Spark equivalent; use LIMIT, or row_number() over (order by ...) in a subquery."),
     (re.compile(r"\bMONTHNAME\s*\(", re.IGNORECASE), "MONTHNAME",
      "MONTHNAME is not a Spark function; use date_format(col, 'MMM')."),
     (re.compile(r"\b(SEQ[1248]|GENERATOR)\s*\(", re.IGNORECASE), "GENERATOR",
@@ -145,8 +147,12 @@ def convert_statement(sql: str, dialect: str = "snowflake") -> Result:
         return Result(sql, None, UNPARSED, [Finding("PARSE", "unsupported", str(exc)[:200])])
     flattened = False
     if dialect == "snowflake":
-        expr = expr.transform(_keep_try_semantics).transform(spark_semantics).transform(spark_semantics)  # 2nd pass: nested cases
-        flattened = flatten_to_lateral_view(expr)
+        expr = expr.transform(_keep_try_semantics)
+    # these rewrites work on the parsed tree, so they apply to every source dialect (STRING_AGG / GROUP_CONCAT / LISTAGG
+    # with an ORDER BY, PERCENTILE_CONT ... WITHIN GROUP, JSON arrays); the DATEDIFF one only where the source counts boundaries
+    boundary = dialect in BOUNDARY_DATEDIFF_DIALECTS
+    expr = expr.transform(lambda n: spark_semantics(n, boundary)).transform(lambda n: spark_semantics(n, boundary))  # 2nd pass: nested
+    flattened = flatten_to_lateral_view(expr)
     cap = _Capture()
     logger = logging.getLogger("sqlglot")
     logger.addHandler(cap)
