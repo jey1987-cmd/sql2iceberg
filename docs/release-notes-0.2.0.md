@@ -26,7 +26,7 @@ New to this? Read the [step-by-step guide](https://github.com/jey1987-cmd/sql2ic
   `ARRAY_SIZE(variant:path)` no longer fails in Spark.
 - Snowflake `TIMESTAMP_TZ` / `TIMESTAMP_LTZ` columns can be copied over JDBC.
 
-Known: Snowflake truncates a windowed `AVG` to 5 decimals, Spark keeps 6. `FLATTEN` supports value and index only and assumes JSON
+Known: in my test a windowed `AVG` came back from Snowflake with 5 decimals and from Spark with 6 (totals 15229.52982 and 15229.529997). `FLATTEN` supports value and index only and assumes JSON
 text columns. Validation compares counts and sums, not every row.
 
 **Full changelog:** https://github.com/jey1987-cmd/sql2iceberg/blob/main/CHANGELOG.md

@@ -48,12 +48,16 @@ GROUP BY c.customer_id, c.name;
 
 Use `CREATE TABLE ... AS SELECT` (the result becomes a table) or `INSERT INTO ... SELECT`. A file may hold several statements.
 
+Write `CREATE OR REPLACE TABLE` (not plain `CREATE TABLE`) if you want to be able to run the generated script again: a plain `CREATE TABLE` fails the second time because the table already exists.
+
 ## Step 2: see what the tool finds
 
 ```bash
 sql2iceberg detect sqls          # which database the SQL looks like, and the statements found
 sql2iceberg map sqls             # which tables are read (sources) and which are created (results)
 ```
+
+Tip: the tool guesses the database from the SQL, but many databases share syntax (a `::date` cast is valid in both Postgres and Snowflake). When you know which database your SQL is written for, add `--platform postgres` (or `snowflake`, `mysql`, `mssql`, `oracle`) to these commands.
 
 ## Step 3: generate the scripts
 

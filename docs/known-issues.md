@@ -12,8 +12,8 @@ columns arrive over JDBC); `PERCENTILE_CONT` becomes the exact `percentile` (SQL
 quarter|year, ...)` counts calendar boundaries like Snowflake (Spark counts elapsed units on timestamps); `ARRAY_SIZE(variant:path)`
 parses the JSON first. Checked against a live Snowflake account on 100 table-level checks; see CHANGELOG.
 
-Known remaining difference: Snowflake truncates a windowed `AVG` over `NUMBER(p,2)` to 5 decimals, Spark keeps 6 and rounds
-(sums of such columns differ around the 8th significant digit).
+Known remaining difference: in my test, a windowed `AVG` over a `NUMBER(p,2)` column came back from Snowflake with 5 decimals and from Spark with 6
+(the two column totals were 15229.52982 and 15229.529997, a difference around the 8th significant digit). Other engine versions may differ.
 
 Review (runs, but may differ from Snowflake; confirm on your own Snowflake account):
 DATEADD on timestamps returns a DATE; division by zero is NULL in Spark 3.5 and an error in Snowflake;

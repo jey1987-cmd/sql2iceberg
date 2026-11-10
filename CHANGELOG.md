@@ -41,7 +41,7 @@ and the project uses [Semantic Versioning](https://semver.org/). While the versi
   (previously "unsupported", not generated).
 - `LATERAL FLATTEN(input => col)` using `value` / `index` becomes `LATERAL VIEW [POS]EXPLODE(from_json(col, 'array<string>'))`
   (previously "unsupported"). Flagged `FLATTEN_JSON`: it assumes the column holds JSON text, as VARIANT/ARRAY do over JDBC.
-- `PERCENTILE_CONT` now becomes the exact `percentile` (SQLGlot produced the approximate `percentile_approx`: p90 1088.48 vs 1067.42).
+- `PERCENTILE_CONT` now becomes the exact `percentile` (SQLGlot produced the approximate `percentile_approx`: the sum of four per-status p90 values was 1088.48 against 1067.42).
 - `DATEDIFF(day|month|quarter|year, a, b)` counts boundaries like Snowflake (day on timestamps differed: 301 vs 342).
 - `ARRAY_SIZE(variant:path)` no longer produces `SIZE(get_json_object(...))`, which Spark rejects.
 - Generated Snowflake ingest reads `TIMESTAMP_TZ` / `TIMESTAMP_LTZ` columns as UTC `TIMESTAMP_NTZ` (Spark's JDBC reader failed with
