@@ -31,3 +31,5 @@ scripts/pyspark_to_s3.py
 scripts/cost_compare.py
 medium-article.md
 medium-article.html
+medium-howto.md
+medium-howto.html
