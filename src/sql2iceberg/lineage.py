@@ -13,10 +13,10 @@ def _name(t: exp.Table) -> str:
     return ".".join(p.name for p in (t.args.get("catalog"), t.args.get("db"), t.this) if p)
 
 
-def map_statement(sql: str) -> dict:
+def map_statement(sql: str, dialect: str = "snowflake") -> dict:
     """Return {kind, outputs, inputs} for one statement. Table names are as written."""
     try:
-        tree = sqlglot.parse_one(sql, read="snowflake")
+        tree = sqlglot.parse_one(sql, read=dialect)
     except ParseError as exc:
         return {"kind": "unparsed", "outputs": [], "inputs": [], "error": str(exc)[:160]}
     kind = type(tree).__name__.upper()
@@ -39,14 +39,14 @@ def map_statement(sql: str) -> dict:
     return {"kind": kind, "outputs": outputs, "inputs": inputs}
 
 
-def map_statements(statements) -> dict:
+def map_statements(statements, dialect: str = "snowflake") -> dict:
     """Build a lineage map over detected statements: per statement plus per table."""
     items, tables = [], {}
     for s in statements:
         if s.dynamic or s.parse_error:
             items.append({"id": s.id, "kind": "dynamic" if s.dynamic else "unparsed", "inputs": [], "outputs": []})
             continue
-        m = map_statement(s.sql)
+        m = map_statement(s.sql, dialect)
         items.append({"id": s.id, **m})
         for n in m["inputs"]:
             tables.setdefault(n, {"read_by": [], "written_by": []})["read_by"].append(s.id)

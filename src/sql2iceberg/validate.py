@@ -19,7 +19,9 @@ from dataclasses import dataclass, field
 from .tracing import span
 
 #: how each platform spells a floating-point cast
-CASTS = {"snowflake": "FLOAT", "spark": "DOUBLE", "athena": "DOUBLE", "bigquery": "FLOAT64", "sqlite": "REAL"}
+CASTS = {"snowflake": "FLOAT", "spark": "DOUBLE", "athena": "DOUBLE", "bigquery": "FLOAT64", "sqlite": "REAL",
+         # experimental sources (not run against live servers)
+         "postgres": "DOUBLE PRECISION", "mysql": "DOUBLE", "mssql": "FLOAT", "oracle": "BINARY_DOUBLE"}
 
 
 @dataclass
@@ -148,6 +150,12 @@ def bigquery_runner(client) -> Callable[[str], list[tuple]]:
     return lambda sql: [tuple(r) for r in client.query(sql).result()]
 
 
+def get_connector_for(kind: str):
+    from .connectors import get_connector
+
+    return get_connector(kind)
+
+
 # ---- config-file entry point ------------------------------------------------------------------------------
 
 def _target_from_config(cfg: dict) -> Target:
@@ -168,7 +176,12 @@ def _target_from_config(cfg: dict) -> Target:
 
         client = bigquery.Client(project=cfg["project"], location=cfg.get("location", "US"))
         return Target(cfg.get("name", "bigquery"), bigquery_runner(client), cfg["tables"], CASTS["bigquery"])
-    raise ValueError(f"unknown target kind {kind!r}: use snowflake, athena or bigquery")
+    from .connectors import REGISTRY
+
+    if kind in REGISTRY:  # postgres, mysql, mssql, oracle (experimental): credentials come from environment variables
+        conn = get_connector_for(kind)
+        return Target(cfg.get("name", kind), conn.query, cfg["tables"], CASTS[kind])
+    raise ValueError(f"unknown target kind {kind!r}: use snowflake, postgres, mysql, mssql, oracle, athena or bigquery")
 
 
 def report_from_config(cfg: dict) -> ValidationReport:

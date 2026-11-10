@@ -81,3 +81,16 @@ rows2 = [
 ]
 render("validation-results.png", ["Table", "Rows", "What matched on all four platforms (38 checks)"], rows2,
        [0.24, 0.10, 0.66], {(i, 1): GREEN for i in range(4)} | {(i, 2): GREEN for i in range(4)}, mono_cols=(0,))
+
+
+# table 3: supported source databases
+rows3 = [
+    ["Snowflake", "snowflake", "SNOWFLAKE_ACCOUNT, SNOWFLAKE_USER, SNOWFLAKE_PASSWORD or SNOWFLAKE_PRIVATE_KEY_PATH", "Tested end to end"],
+    ["PostgreSQL", "postgres", "PGHOST, PGDATABASE, PGUSER, PGPASSWORD", "Experimental"],
+    ["MySQL", "mysql", "MYSQL_HOST, MYSQL_DATABASE, MYSQL_USER, MYSQL_PASSWORD", "Experimental"],
+    ["SQL Server", "mssql", "MSSQL_SERVER, MSSQL_DATABASE, MSSQL_USER, MSSQL_PASSWORD", "Experimental"],
+    ["Oracle", "oracle", "ORACLE_DSN, ORACLE_USER, ORACLE_PASSWORD", "Experimental"],
+]
+render("source-databases.png", ["Database", "--platform", "Environment variables the job reads", "Status"], rows3,
+       [0.15, 0.14, 0.51, 0.20], {(0, 3): GREEN} | {(i, 3): "#FFF4D6" for i in range(1, 5)}, mono_cols=(1,),
+       legend="Experimental: the generated script was checked for every database; only Snowflake ran against a live server.")

@@ -101,3 +101,43 @@ def test_issue_url_points_at_repo_and_has_no_secret(monkeypatch):
     url = diagnostics.issue_url("Crash on glue")
     assert url.startswith("https://github.com/jey1987-cmd/sql2iceberg/issues/new?template=bug_report.yml")
     assert "my-private-profile" not in url
+
+
+def test_cli_convert_uses_platform_dialect(tmp_path):
+    """MySQL backtick quoting only parses with the mysql dialect; the CLI must honour --platform."""
+    import json
+
+    from sql2iceberg.cli import main
+
+    f = tmp_path / "q.sql"
+    f.write_text("SELECT `id`, `name` FROM `customers` LIMIT 5;")
+    out_bad, out_ok = tmp_path / "bad", tmp_path / "ok"
+    assert main(["convert", str(f), "--platform", "snowflake", "--out", str(out_bad)]) == 0
+    assert main(["convert", str(f), "--platform", "mysql", "--out", str(out_ok)]) == 0
+    bad = json.loads((out_bad / "report.json").read_text())["summary"]
+    ok = json.loads((out_ok / "report.json").read_text())["summary"]
+    assert ok.get("converted") == 1 and not bad.get("converted")
+
+
+def test_cli_platform_autodetect_from_driver_import(tmp_path, capsys):
+    from sql2iceberg.cli import main
+
+    (tmp_path / "app.py").write_text("import psycopg2\nconn = psycopg2.connect()\ncur = conn.cursor()\n"
+                                     "cur.execute('SELECT id FROM customers')\n")
+    assert main(["detect", str(tmp_path)]) == 0
+    assert "source platform: postgres" in capsys.readouterr().err
+
+
+def test_validate_config_accepts_rdbms_kinds(monkeypatch):
+    from sql2iceberg import validate as v
+
+    class FakeConn:
+        def query(self, sql):
+            return [(3.0, 3.0)]
+
+    monkeypatch.setattr(v, "get_connector_for", lambda kind: FakeConn())
+    cfg = {"tables": {"t": ["id"]}, "reference": {"kind": "postgres", "tables": {"t": "public.t"}},
+           "targets": [{"kind": "mysql", "tables": {"t": "t"}}]}
+    rep = v.report_from_config(cfg)
+    assert rep.ok and {r.check for r in rep.results} == {"row_count", "non_null:id"}
+    assert v.CASTS["postgres"] == "DOUBLE PRECISION"

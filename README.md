@@ -14,6 +14,10 @@
 Take the SQL in your code base, convert it to **PySpark**, persist the result as **Apache Iceberg** tables, expose those
 tables to **Snowflake, AWS (Glue/Athena) and GCP (BigQuery)**, and **validate** the migration.
 
+**Built for any SQL code base, tested end to end on Snowflake.** Snowflake, Postgres, MySQL, SQL Server and Oracle SQL are
+parsed and converted (any dialect SQLGlot supports can be added). The full path, source to Iceberg to three target platforms, was
+run against real Snowflake, AWS and Google Cloud accounts; the other databases are experimental.
+
 **Status: alpha.** One source platform (Snowflake) and three target platforms were exercised against real
 accounts; everything else is written but untested and labelled so. See [what was tested](https://github.com/jey1987-cmd/sql2iceberg/blob/main/docs/environments.md#what-was-tested)
 and [what is not supported yet](#limitations).
@@ -88,7 +92,7 @@ Full details, versions we tested and the list of every package and jar: [docs/en
 ## Quick start
 
 ```bash
-# 1. which platform is this code base for, and what SQL is in it?
+# 1. which platform is this code base for, and what SQL is in it? (add --platform postgres|mysql|mssql|oracle|snowflake to override)
 sql2iceberg detect path/to/code
 # 2. convert, and see what needs hand work
 sql2iceberg convert path/to/code --out out

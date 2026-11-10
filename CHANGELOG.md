@@ -13,6 +13,10 @@ and the project uses [Semantic Versioning](https://semver.org/). While the versi
 ### Added
 - `sql2iceberg pyspark` options that were only available from Python: `--region`, `--jars` and `--no-maven` (offline machines),
   `--jdbc-driver`, `--gcs-project` and `--gcs-token-from-env` (GCS warehouses).
+- `--platform` on `detect`, `convert`, `report` and `map`. The platform (snowflake, postgres, mysql, mssql, oracle) is detected
+  from the code when omitted. Before this, these commands always parsed SQL as Snowflake.
+- `validate` can use Postgres, MySQL, SQL Server and Oracle (experimental) as the reference or a target, not only Snowflake,
+  Athena and BigQuery.
 - Regression tests that run the documented quick-start commands.
 
 ## [0.1.1] - 2026-11-09

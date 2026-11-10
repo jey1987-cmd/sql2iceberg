@@ -11,10 +11,23 @@ from .convert import UNPARSED, UNSUPPORTED, convert_statement
 from .detect import detect_path
 
 
-def _run(path: str) -> tuple[list, dict]:
-    statements = detect_path(path)
+def _dialect(path: str, platform: str | None) -> tuple[str, str]:
+    """(platform, SQLGlot dialect): the given platform, else detected from the code, else Snowflake."""
+    from .connectors import REGISTRY
+    from .platforms import detect_platform
+
+    chosen = platform or detect_platform(path)["platform"] or "snowflake"
+    if chosen not in REGISTRY:
+        raise SystemExit(f"unknown platform {chosen!r}; choose from {sorted(REGISTRY)}")
+    if not platform:
+        print(f"source platform: {chosen} (detected; override with --platform)", file=sys.stderr)
+    return chosen, REGISTRY[chosen].sqlglot_dialect
+
+
+def _run(path: str, dialect: str = "snowflake") -> tuple[list, dict]:
+    statements = detect_path(path, dialect=dialect)
     results = {
-        s.id: convert_statement(s.sql)
+        s.id: convert_statement(s.sql, dialect=dialect)
         for s in statements
         if not s.dynamic and not s.parse_error
     }
@@ -37,6 +50,7 @@ def _main(argv: list[str]) -> int:
     v.add_argument("--iceberg", action="store_true", help="use an Iceberg Hadoop catalog (needs the Iceberg runtime jar)")
     m = sub.add_parser("map", help="map the tables each statement reads and writes")
     m.add_argument("path")
+    m.add_argument("--platform", help="source platform (default: detected from the code)")
     m.add_argument("--out", help="write lineage.json here")
     g = sub.add_parser("generate", help="write Iceberg v3 Spark DDL, Snowflake-managed Iceberg DDL and a PySpark script")
     g.add_argument("path", help="code folder (statements to convert)")
@@ -82,6 +96,7 @@ def _main(argv: list[str]) -> int:
     for name in ("detect", "convert", "report"):
         p = sub.add_parser(name)
         p.add_argument("path", help="file or folder (.sql, .py, .ipynb)")
+        p.add_argument("--platform", help="source platform: snowflake, postgres, mysql, mssql, oracle (default: detected)")
         if name != "detect":
             p.add_argument("--out", help="output folder for report files (default: print)")
             p.add_argument("--fail-on-unsupported", action="store_true")
@@ -208,13 +223,14 @@ def _main(argv: list[str]) -> int:
         print(f"wrote 4 files to {out}; {len(w1) + len(w2)} type warnings to review")
         return 0
 
-    statements, results = _run(args.path) if args.cmd != "map" else (detect_path(args.path), {})
+    _, dialect = _dialect(args.path, args.platform)
+    statements, results = _run(args.path, dialect) if args.cmd != "map" else (detect_path(args.path, dialect=dialect), {})
     if args.cmd == "map":
         import json
 
         from .lineage import map_statements
 
-        lin = map_statements(statements)
+        lin = map_statements(statements, dialect)
         text = json.dumps(lin, indent=2)
         if args.out:
             Path(args.out).mkdir(parents=True, exist_ok=True)
