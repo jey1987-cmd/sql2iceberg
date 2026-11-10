@@ -84,7 +84,7 @@ Extras: `spark`, `snowflake`, `postgres`, `mysql`, `mssql`, `oracle`, `aws`, `gc
 | Needed for | Requirement |
 |---|---|
 | everything | Python 3.10 or newer |
-| running generated Spark jobs | **Java 17** (Java 21 should work), `pyspark` 3.5 or 4.x. Do not set `SPARK_HOME` to another Spark. |
+| running generated Spark jobs | **Java 17** (Java 21 should work), `pyspark` 4.0 or 4.1 (the default Iceberg jar is for Spark 4.1; `pip install "sql2iceberg[spark]"` installs a matching one). Do not set `SPARK_HOME` to another Spark. |
 | Iceberg tables | Iceberg Spark runtime jar matching your Spark (we used `iceberg-spark-runtime-4.1_2.13-1.12.0`) |
 | Iceberg on S3 / GCS | `iceberg-aws-bundle` / `iceberg-gcp-bundle` jars |
 | reading the source over JDBC | the JDBC driver jar (we used `snowflake-jdbc-3.19.0`) |
@@ -102,7 +102,7 @@ Full details, versions we tested and the list of every package and jar: [docs/en
 # 1. which platform is this code base for, and what SQL is in it? (add --platform postgres|mysql|mssql|oracle|snowflake to override)
 sql2iceberg detect path/to/code
 # 2. generate one PySpark script per SQL file, plus a README, a run order and reports
-sql2iceberg pyspark path/to/code --out out --platform snowflake --source-schema MY_DB.MY_SCHEMA     --jdbc-url "jdbc:snowflake://<account>.snowflakecomputing.com/?warehouse=<WH>&role=<ROLE>" --warehouse ./warehouse
+sql2iceberg pyspark path/to/code --out out --platform snowflake --source-schema MY_DB.MY_SCHEMA \n    --jdbc-url "jdbc:snowflake://<account>.snowflakecomputing.com/?warehouse=<WH>&role=<ROLE>" --warehouse ./warehouse
 #    for S3 use: --catalog-type jdbc --catalog-uri jdbc:sqlite:catalog.db --warehouse s3://my-bucket/warehouse --namespace live
 # 3. read out/README.md (what was generated, in which order to run it, what to double-check), then run it
 #    (set SNOWFLAKE_USER and SNOWFLAKE_PRIVATE_KEY_PATH or SNOWFLAKE_PASSWORD first)

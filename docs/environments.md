@@ -61,5 +61,7 @@ Results (all matched the Snowflake source): 20 customers, 100 orders, 100 order 
 Snowflake (Iceberg on S3), AWS Athena and BigQuery (Iceberg on GCS). Step by step with commands:
 [examples.md](examples.md).
 
-The unit test suite (`pytest -m "not spark"`, 75 tests) needs no cloud accounts. One test runs the generated PySpark
+**Version 0.2.0 (2026-11-10)**, same machine and account: three sets of made-up queries over the same tables, converted, run as one script per SQL file with `run_all.py` and checked with the generated `validate.json` (original SELECTs on Snowflake against the local Iceberg tables): 10 basic queries 84 of 84 checks matched, 8 INSERT statements 32 of 32, 10 complex queries (CTEs, windows, PIVOT, LISTAGG, FLATTEN, recursive CTE, VARIANT paths) 99 of 100. The INSERT and complex sets were also run from the package installed from PyPI into a fresh virtual environment, with the same results, but only after pinning PySpark to 4.1.4: an unpinned install pulled PySpark 4.3.0, which does not work with the Spark 4.1 Iceberg jar (fixed by limiting the `spark` extra to PySpark below 4.2 in 0.2.1). The one difference is the precision of a windowed `AVG` (Snowflake truncates to 5 decimals, Spark keeps 6). The FLATTEN and VARIANT queries ran on columns that are all NULL in that account, so they prove the code runs, not the values.
+
+The unit test suite (`pytest -m "not spark"`, 100 tests) needs no cloud accounts. One test runs the generated PySpark
 job against SQLite with a local Iceberg catalog (`SQL2ICE_ICEBERG=1` and the jars in `./jars`).

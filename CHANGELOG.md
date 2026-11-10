@@ -3,6 +3,16 @@
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/),
 and the project uses [Semantic Versioning](https://semver.org/). While the version is below 1.0, minor releases may change behaviour.
 
+## [0.2.1] - 2026-11-10
+
+### Fixed
+- `pip install "sql2iceberg[spark]"` (and the `pytest` and `all` extras) installed the newest PySpark, which is 4.3 at the time of writing,
+  but the generated scripts use the Iceberg runtime jar for Spark 4.1, so every script failed at start. The extras now require
+  `pyspark>=3.5,<4.2`. Found by installing 0.2.0 from PyPI into a clean environment.
+
+### Documentation
+- Troubleshooting entry for a Spark and Iceberg jar mismatch; README states the supported PySpark versions; release notes for 0.2.0 added.
+
 ## [0.2.0] - 2026-11-10
 
 ### Changed
