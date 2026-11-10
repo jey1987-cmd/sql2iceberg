@@ -5,3 +5,27 @@ build/
 .venv/
 .pytest_cache/
 out/
+.env
+jars/
+warehouse/
+seed/
+
+# personal / generated: kept local
+CLAUDE.md
+PUBLISHING-RUNBOOK.md
+medium-article-draft.md
+curated/
+converted/
+spark_scripts/
+scripts/cleanup_live_test.md
+catalog.db
+*.jsonl
+.venv/
+.ruff_cache/
+.env.*
+!.env.example
+scripts/curated_e2e.py
+scripts/export_spark.py
+scripts/pyspark_vs_sql.py
+scripts/pyspark_to_s3.py
+scripts/cost_compare.py

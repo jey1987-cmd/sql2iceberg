@@ -1,6 +1,6 @@
 import pytest
 
-from sf2iceberg.convert import CONVERTED, REVIEW, UNSUPPORTED, convert_statement
+from sql2iceberg.convert import CONVERTED, REVIEW, UNSUPPORTED, convert_statement
 
 
 def codes(result):
@@ -44,3 +44,22 @@ def test_semantic_differences_need_review(sql, code):
 def test_unparseable_statement_is_reported():
     r = convert_statement("SELECT ((")
     assert r.status == "unparsed"
+
+
+@pytest.mark.parametrize(
+    "sql,expected",
+    [
+        ("SELECT TRY_TO_NUMBER(c) FROM t", "TRY_CAST(c AS DECIMAL(38, 0))"),
+        ("SELECT TRY_TO_DECIMAL(c, 10, 2) FROM t", "TRY_CAST(c AS DECIMAL(10, 2))"),
+        ("SELECT TRY_TO_DOUBLE(c) FROM t", "TRY_CAST(c AS DOUBLE)"),
+        ("SELECT TRY_TO_DATE(c) FROM t", "TRY_TO_DATE(c)"),
+        ("SELECT TRY_TO_DATE(c, 'yyyymmdd') FROM t", "TRY_TO_DATE(c, 'yyyyMMdd')"),
+    ],
+)
+def test_try_functions_stay_safe(sql, expected):
+    r = convert_statement(sql)
+    assert expected in r.spark_sql and "DROPPED" not in codes(r)
+
+
+def test_plain_to_date_is_not_made_safe():
+    assert "TRY_" not in convert_statement("SELECT TO_DATE(c) FROM t").spark_sql

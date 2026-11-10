@@ -99,6 +99,29 @@ def _source_checks(expr: exp.Expression) -> list[Finding]:
     return found
 
 
+def _keep_try_semantics(node: exp.Expression) -> exp.Expression:
+    """SQLGlot drops the TRY_ of TRY_TO_NUMBER/TRY_TO_DOUBLE/TRY_TO_DATE in Spark output. Under Spark 4 (ANSI on)
+    the plain CAST/TO_DATE then raises on bad input where Snowflake returns NULL, so keep the safe form."""
+    if node.args.get("safe") and not node.args.get("format"):
+        if isinstance(node, exp.ToNumber):
+            precision = node.args.get("precision") or exp.Literal.number(38)
+            scale = node.args.get("scale") or exp.Literal.number(0)
+            decimal = exp.DataType(
+                this=exp.DataType.Type.DECIMAL,
+                expressions=[exp.DataTypeParam(this=precision), exp.DataTypeParam(this=scale)],
+            )
+            return exp.TryCast(this=node.this, to=decimal, safe=True)
+        if isinstance(node, exp.ToDouble):
+            return exp.TryCast(this=node.this, to=exp.DataType.build("DOUBLE"), safe=True)
+    if isinstance(node, exp.TsOrDsToDate) and node.args.get("safe"):
+        plain = node.copy()
+        plain.set("safe", False)
+        text = plain.sql(dialect="spark", unsupported_level=ErrorLevel.IGNORE)
+        # try_to_date exists from Spark 4.0; earlier versions have no safe date parse
+        return sqlglot.parse_one(re.sub(r"^TO_DATE", "TRY_TO_DATE", text), read="spark")
+    return node
+
+
 class _Capture(logging.Handler):
     """Collect SQLGlot's warnings about arguments it cannot express in the target dialect."""
 
@@ -110,12 +133,14 @@ class _Capture(logging.Handler):
         self.messages.append(record.getMessage())
 
 
-def convert_statement(sql: str) -> Result:
-    """Convert one Snowflake statement and report findings."""
+def convert_statement(sql: str, dialect: str = "snowflake") -> Result:
+    """Convert one statement from ``dialect`` to Spark SQL and report findings."""
     try:
-        expr = sqlglot.parse_one(sql, read="snowflake")
+        expr = sqlglot.parse_one(sql, read=dialect)
     except ParseError as exc:
         return Result(sql, None, UNPARSED, [Finding("PARSE", "unsupported", str(exc)[:200])])
+    if dialect == "snowflake":
+        expr = expr.transform(_keep_try_semantics)
     cap = _Capture()
     logger = logging.getLogger("sqlglot")
     logger.addHandler(cap)

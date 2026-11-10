@@ -24,19 +24,20 @@ class Statement:
     parse_error: str | None = None
 
 
-def _split(sql: str) -> list[str]:
-    """Split a SQL script into statements with the Snowflake parser."""
+def _split(sql: str, dialect: str = "snowflake") -> list[str]:
+    """Split a SQL script into statements with the source dialect parser."""
     out = []
-    for expr in sqlglot.parse(sql, read="snowflake"):
+    for expr in sqlglot.parse(sql, read=dialect):
         if expr is not None:
-            out.append(expr.sql(dialect="snowflake", comments=False))
+            out.append(expr.sql(dialect=dialect, comments=False))
     return out
 
 
-def detect_sql_text(text: str, file: str = "<text>", first_line: int = 1) -> list[Statement]:
+def detect_sql_text(text: str, file: str = "<text>", first_line: int = 1,
+                    dialect: str = "snowflake") -> list[Statement]:
     statements: list[Statement] = []
     try:
-        parts = _split(text)
+        parts = _split(text, dialect)
     except ParseError as exc:
         return [Statement(f"{file}:{first_line}", file, first_line, text.strip(), parse_error=str(exc)[:200])]
     for i, sql in enumerate(parts, 1):
@@ -44,7 +45,7 @@ def detect_sql_text(text: str, file: str = "<text>", first_line: int = 1) -> lis
     return statements
 
 
-def detect_python(source: str, file: str = "<python>") -> list[Statement]:
+def detect_python(source: str, file: str = "<python>", dialect: str = "snowflake") -> list[Statement]:
     """Find string literals passed to cursor.execute(), spark.sql() and similar calls."""
     found: list[Statement] = []
     try:
@@ -60,13 +61,13 @@ def detect_python(source: str, file: str = "<python>") -> list[Statement]:
             continue
         arg = node.args[0]
         if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
-            found.extend(detect_sql_text(arg.value, file, arg.lineno))
+            found.extend(detect_sql_text(arg.value, file, arg.lineno, dialect))
         elif isinstance(arg, (ast.JoinedStr, ast.BinOp)):
             found.append(Statement(f"{file}:{arg.lineno}", file, arg.lineno, "", dynamic=True))
     return found
 
 
-def detect_notebook(path: Path) -> list[Statement]:
+def detect_notebook(path: Path, dialect: str = "snowflake") -> list[Statement]:
     nb = json.loads(path.read_text(encoding="utf-8"))
     found: list[Statement] = []
     for n, cell in enumerate(nb.get("cells", []), 1):
@@ -74,11 +75,11 @@ def detect_notebook(path: Path) -> list[Statement]:
             continue
         src = "".join(cell.get("source", []))
         src = "\n".join(l for l in src.splitlines() if not l.lstrip().startswith(("%", "!")))
-        found.extend(detect_python(src, f"{path}#cell{n}"))
+        found.extend(detect_python(src, f"{path}#cell{n}", dialect))
     return found
 
 
-def detect_path(path: str | Path) -> list[Statement]:
+def detect_path(path: str | Path, dialect: str = "snowflake") -> list[Statement]:
     """Detect SQL in a file or in every supported file under a folder."""
     p = Path(path)
     files = sorted(f for f in p.rglob("*") if f.is_file()) if p.is_dir() else [p]
@@ -86,9 +87,9 @@ def detect_path(path: str | Path) -> list[Statement]:
     for f in files:
         suffix = f.suffix.lower()
         if suffix == ".sql":
-            found.extend(detect_sql_text(f.read_text(encoding="utf-8"), str(f)))
+            found.extend(detect_sql_text(f.read_text(encoding="utf-8"), str(f), dialect=dialect))
         elif suffix == ".py":
-            found.extend(detect_python(f.read_text(encoding="utf-8"), str(f)))
+            found.extend(detect_python(f.read_text(encoding="utf-8"), str(f), dialect))
         elif suffix == ".ipynb":
-            found.extend(detect_notebook(f))
+            found.extend(detect_notebook(f, dialect))
     return found

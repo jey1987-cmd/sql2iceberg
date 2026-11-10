@@ -1,4 +1,4 @@
-"""Executes converted SQL in local Spark on synthetic tables (needs sf2iceberg[pytest])."""
+"""Executes converted SQL in local Spark on synthetic tables (needs sql2iceberg[pytest])."""
 import datetime as dt
 
 import pytest
@@ -44,7 +44,7 @@ def test_live_comparison_placeholder():
 def test_verify_flow_passes_for_qualify_case(sf2i_spark):
     from pathlib import Path
 
-    from sf2iceberg.verify import verify_case
+    from sql2iceberg.verify import verify_case
 
     case = Path(__file__).parent.parent / "examples" / "cases" / "qualify"
     ver = verify_case(case, spark=sf2i_spark)
@@ -54,7 +54,7 @@ def test_verify_flow_passes_for_qualify_case(sf2i_spark):
 def test_verify_flow_catches_dateadd_type_change(sf2i_spark):
     from pathlib import Path
 
-    from sf2iceberg.verify import verify_case
+    from sql2iceberg.verify import verify_case
 
     case = Path(__file__).parent.parent / "examples" / "cases" / "dateadd_timestamp"
     ver = verify_case(case, spark=sf2i_spark)

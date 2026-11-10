@@ -6,11 +6,11 @@ python3 -m venv .venv
 . .venv/bin/activate
 pip install -e ".[spark,pytest,dev]"
 python scripts/make_seed.py seed
-export SF2ICE_ICEBERG=1
+export SQL2ICE_ICEBERG=1
 # Iceberg runtime for Spark 3.5. Override ICEBERG_PKG with a newer release if the v3 check below fails.
 export ICEBERG_PKG="${ICEBERG_PKG:-org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.9.2}"
 python - <<'PY'
-from sf2iceberg.verify import make_spark
+from sql2iceberg.verify import make_spark
 s = make_spark(iceberg=True, warehouse="./warehouse")
 s.sql("DROP TABLE IF EXISTS v3check")
 try:
@@ -19,4 +19,4 @@ try:
 except Exception as e:
     print("format-version 3 NOT accepted by this Iceberg release:", str(e).splitlines()[0][:200])
 PY
-echo "Next: sf2iceberg generate examples/corpus/pipelines --ddl examples/corpus/ddl --out out"
+echo "Next: sql2iceberg generate examples/corpus/pipelines --ddl examples/corpus/ddl --out out"

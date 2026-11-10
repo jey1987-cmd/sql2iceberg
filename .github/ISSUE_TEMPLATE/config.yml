@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Troubleshooting guide
+    url: https://github.com/jey1987/sql2iceberg/blob/main/docs/troubleshooting.md
+    about: Most setup problems (Java, SPARK_HOME, certificates, billing) are covered here.

@@ -1,7 +1,7 @@
 """pytest plugin: fixtures and markers for validating converted SQL.
 
-Installed through the `pytest11` entry point. Spark fixtures need `pip install 'sf2iceberg[pytest]'`.
-Set SF2ICE_ICEBERG=1 (and optionally ICEBERG_PKG) to add the Iceberg runtime and a Hadoop catalog.
+Installed through the `pytest11` entry point. Spark fixtures need `pip install 'sql2iceberg[pytest]'`.
+Set SQL2ICE_ICEBERG=1 (and optionally ICEBERG_PKG) to add the Iceberg runtime and a Hadoop catalog.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ DEFAULT_ICEBERG_PKG = "org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.9.2"
 
 
 def pytest_addoption(parser):
-    group = parser.getgroup("sf2iceberg")
+    group = parser.getgroup("sql2iceberg")
     group.addoption("--live-snowflake", action="store_true", default=False,
                     help="run tests marked live_snowflake against a real Snowflake account (spends credits)")
 
@@ -32,7 +32,7 @@ def pytest_collection_modifyitems(config, items):
 
 @pytest.fixture(scope="session")
 def sf2i_has_iceberg() -> bool:
-    return os.environ.get("SF2ICE_ICEBERG") == "1"
+    return os.environ.get("SQL2ICE_ICEBERG") == "1"
 
 
 @pytest.fixture(scope="session")
@@ -41,16 +41,19 @@ def sf2i_spark(tmp_path_factory, sf2i_has_iceberg):
     warehouse = str(tmp_path_factory.mktemp("warehouse"))
     builder = (
         pyspark_sql.SparkSession.builder.master("local[2]")
-        .appName("sf2iceberg-tests")
+        .appName("sql2iceberg-tests")
         .config("spark.ui.enabled", "false")
         .config("spark.sql.shuffle.partitions", "2")
         .config("spark.sql.warehouse.dir", warehouse + "/spark")
     )
     if sf2i_has_iceberg:
         pkg = os.environ.get("ICEBERG_PKG", DEFAULT_ICEBERG_PKG)
+        jar = os.environ.get("ICEBERG_JAR")  # local jar, for machines that cannot reach Maven Central
         builder = (
-            builder.config("spark.jars.packages", pkg)
-            .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions")
+            builder.config("spark.jars", jar) if jar else builder.config("spark.jars.packages", pkg)
+        )
+        builder = (
+            builder.config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions")
             .config("spark.sql.catalog.lake", "org.apache.iceberg.spark.SparkCatalog")
             .config("spark.sql.catalog.lake.type", "hadoop")
             .config("spark.sql.catalog.lake.warehouse", warehouse)

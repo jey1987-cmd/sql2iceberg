@@ -1,11 +1,11 @@
 from pathlib import Path
 
-from sf2iceberg.cli import main
-from sf2iceberg.compare import compare_counts, cost_summary, count_sql, credits_sql, read_counts
-from sf2iceberg.convert import convert_statement
-from sf2iceberg.detect import detect_path
-from sf2iceberg.generate import snowflake_iceberg_ddl, spark_iceberg_ddl
-from sf2iceberg.lineage import map_statement, map_statements
+from sql2iceberg.cli import main
+from sql2iceberg.compare import compare_counts, cost_summary, count_sql, credits_sql, read_counts
+from sql2iceberg.convert import convert_statement
+from sql2iceberg.detect import detect_path
+from sql2iceberg.generate import snowflake_iceberg_ddl, spark_iceberg_ddl
+from sql2iceberg.lineage import map_statement, map_statements
 
 CORPUS = Path(__file__).parent.parent / "examples" / "corpus"
 DDL = (CORPUS / "ddl" / "schema.sql").read_text()

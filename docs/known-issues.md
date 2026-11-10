@@ -11,7 +11,7 @@ TO_DATE format argument dropped; REGEXP_LIKE whole-string vs RLIKE partial match
 string column; OBJECT_CONSTRUCT becomes STRUCT.
 
 Not yet tested: Iceberg-specific behavior (MERGE INTO, CREATE OR REPLACE TABLE AS SELECT on Iceberg).
-Run `SF2ICE_ICEBERG=1 pytest -m spark` with network access to Maven Central.
+Run `SQL2ICE_ICEBERG=1 pytest -m spark` with network access to Maven Central.
 
 ## Found while building the synthetic corpus (Spark 3.5.6)
 

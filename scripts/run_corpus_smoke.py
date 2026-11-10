@@ -5,9 +5,9 @@ import sys
 import tempfile
 from pathlib import Path
 
-from sf2iceberg.convert import convert_statement
-from sf2iceberg.detect import detect_path
-from sf2iceberg.verify import make_spark
+from sql2iceberg.convert import convert_statement
+from sql2iceberg.detect import detect_path
+from sql2iceberg.verify import make_spark
 
 seed = Path(tempfile.mkdtemp()); subprocess.run([sys.executable, "scripts/make_seed.py", str(seed)], check=True)
 spark = make_spark()

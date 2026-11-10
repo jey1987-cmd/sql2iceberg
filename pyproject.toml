@@ -3,40 +3,66 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "sf2iceberg"            # working name: check PyPI/GitHub availability and rename if needed
-version = "0.1.0.dev0"
-description = "Detect Snowflake SQL in code, convert it for Spark/Iceberg, and verify the result under pytest."
+name = "sql2iceberg"
+version = "0.1.0"
+description = "Convert SQL from Snowflake and other databases to PySpark, persist it as Apache Iceberg tables, expose them to Snowflake, AWS and GCP, and validate the result."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Jeyaraman Ramalingam" }]
+keywords = ["iceberg", "pyspark", "sql", "snowflake", "migration", "sqlglot", "glue", "bigquery", "data-engineering"]
 classifiers = [
   "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Information Technology",
+  "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Topic :: Database",
+  "Topic :: Software Development :: Code Generators",
   "Framework :: Pytest",
 ]
 dependencies = ["sqlglot>=30"]
 
+[project.urls]
+Homepage = "https://github.com/jey1987/sql2iceberg"
+Documentation = "https://github.com/jey1987/sql2iceberg/tree/main/docs"
+Issues = "https://github.com/jey1987/sql2iceberg/issues"
+Changelog = "https://github.com/jey1987/sql2iceberg/blob/main/CHANGELOG.md"
+
 [project.optional-dependencies]
-spark = ["pyspark>=3.5,<4"]
-pytest = ["pytest>=8", "chispa>=0.10", "pyspark>=3.5,<4"]
-dev = ["pytest>=8", "ruff"]
+spark = ["pyspark>=3.5"]
+snowflake = ["snowflake-connector-python>=3.12"]
+postgres = ["psycopg2-binary>=2.9"]
+mysql = ["pymysql>=1.1"]
+mssql = ["pyodbc>=5"]
+oracle = ["oracledb>=2"]
+aws = ["boto3>=1.34"]
+gcp = ["google-cloud-bigquery>=3.20"]
+pytest = ["pytest>=8", "chispa>=0.10", "pyspark>=3.5"]
+all = ["pyspark>=3.5", "snowflake-connector-python>=3.12", "boto3>=1.34", "google-cloud-bigquery>=3.20"]
+dev = ["pytest>=8", "ruff", "build", "twine"]
 
 [project.scripts]
-sf2iceberg = "sf2iceberg.cli:main"
+sql2iceberg = "sql2iceberg.cli:main"
 
 [project.entry-points.pytest11]
-sf2iceberg = "sf2iceberg.pytest_plugin"
+sql2iceberg = "sql2iceberg.pytest_plugin"
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "tests", "docs", "examples", "README.md", "LICENSE", "CHANGELOG.md", "CONTRIBUTING.md", "pyproject.toml"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/sf2iceberg"]
+packages = ["src/sql2iceberg"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
-  "spark: needs a local Spark session (pip install 'sf2iceberg[pytest]')",
+  "spark: needs a local Spark session (pip install 'sql2iceberg[pytest]')",
   "live_snowflake: runs against a real Snowflake account; skipped unless --live-snowflake",
 ]
 

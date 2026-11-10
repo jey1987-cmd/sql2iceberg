@@ -14,7 +14,7 @@ The sandbox I built this in could not download the Iceberg jar, so the Iceberg-e
 
 ## 2. Generate table definitions
 
-    sf2iceberg generate examples/corpus/pipelines --ddl examples/corpus/ddl --out out --external-volume MY_VOLUME
+    sql2iceberg generate examples/corpus/pipelines --ddl examples/corpus/ddl --out out --external-volume MY_VOLUME
 
 Writes `iceberg_spark.sql` (Iceberg v3, run in Spark), `snowflake_managed_iceberg.sql` (run in Snowflake),
 `pipeline_pyspark.py` and `warnings.txt` (column types to review, such as VARIANT).
@@ -27,9 +27,9 @@ tables, running queries and loading data spend credits; do that deliberately in 
 
 ## 4. Compare counts and cost
 
-    sf2iceberg sql --counts orders customers          # run the output in Snowflake, export as CSV
-    sf2iceberg sql --credits MY_WH "2026-11-07 10:00" "2026-11-07 11:00"
-    sf2iceberg compare --snowflake-counts sf.csv --iceberg-counts ice.csv \
+    sql2iceberg sql --counts orders customers          # run the output in Snowflake, export as CSV
+    sql2iceberg sql --credits MY_WH "2026-11-07 10:00" "2026-11-07 11:00"
+    sql2iceberg compare --snowflake-counts sf.csv --iceberg-counts ice.csv \
         --snowflake-credits 1.2 --credit-price 3.00 --spark-seconds 840 --spark-hourly-rate 1.50
 
 `WAREHOUSE_METERING_HISTORY` lags up to 180 minutes (cloud services up to 6 hours), so wait before reading credits.

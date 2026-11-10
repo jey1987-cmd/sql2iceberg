@@ -29,7 +29,7 @@ def to_json(report: dict) -> str:
 
 
 def to_markdown(report: dict) -> str:
-    lines = ["# sf2iceberg conversion report", "", f"Statements found: {report['total']}", ""]
+    lines = ["# sql2iceberg conversion report", "", f"Statements found: {report['total']}", ""]
     for status, n in sorted(report["summary"].items()):
         lines.append(f"- {status}: {n}")
     lines.append("")

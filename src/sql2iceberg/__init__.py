@@ -1,4 +1,4 @@
-"""sf2iceberg: detect Snowflake SQL, convert it for Spark/Iceberg, verify under pytest."""
+"""sql2iceberg: detect Snowflake SQL, convert it for Spark/Iceberg, verify under pytest."""
 
 from .convert import Finding, Result, convert_statement
 from .detect import Statement, detect_path, detect_python, detect_sql_text
@@ -12,4 +12,4 @@ __all__ = [
     "detect_python",
     "detect_sql_text",
 ]
-__version__ = "0.1.0.dev0"
+__version__ = "0.1.0"

@@ -38,7 +38,7 @@ def make_spark(iceberg: bool = False, warehouse: str | None = None):
     os.environ.pop("SPARK_HOME", None)
     builder = (
         SparkSession.builder.master("local[2]")
-        .appName("sf2iceberg-verify")
+        .appName("sql2iceberg-verify")
         .config("spark.ui.enabled", "false")
         .config("spark.sql.shuffle.partitions", "2")
     )
@@ -46,12 +46,16 @@ def make_spark(iceberg: bool = False, warehouse: str | None = None):
         pkg = os.environ.get(
             "ICEBERG_PKG", "org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.9.2"
         )
+        # ICEBERG_JAR: a local runtime jar, for machines where Ivy cannot reach Maven Central (e.g. TLS proxy).
+        jar = os.environ.get("ICEBERG_JAR")
         builder = (
-            builder.config("spark.jars.packages", pkg)
-            .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions")
+            builder.config("spark.jars", jar) if jar else builder.config("spark.jars.packages", pkg)
+        )
+        builder = (
+            builder.config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions")
             .config("spark.sql.catalog.lake", "org.apache.iceberg.spark.SparkCatalog")
             .config("spark.sql.catalog.lake.type", "hadoop")
-            .config("spark.sql.catalog.lake.warehouse", warehouse or "/tmp/sf2iceberg-warehouse")
+            .config("spark.sql.catalog.lake.warehouse", warehouse or "/tmp/sql2iceberg-warehouse")
             .config("spark.sql.defaultCatalog", "lake")
         )
     spark = builder.getOrCreate()

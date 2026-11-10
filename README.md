@@ -1,77 +1,132 @@
-# sf2iceberg (working name)
+# sql2iceberg
 
-Find Snowflake SQL in your code, convert it for Spark and Apache Iceberg, and check the result under pytest.
+Take the SQL in your code base, convert it to **PySpark**, persist the result as **Apache Iceberg** tables, expose those
+tables to **Snowflake, AWS (Glue/Athena) and GCP (BigQuery)**, and **validate** the migration.
 
-**Status: early alpha.** It converts with [SQLGlot](https://github.com/tobymao/sqlglot) and then adds checks SQLGlot does not do:
-it flags output that is known not to run in Spark and conversions that can silently change results.
-It does not yet compare results against Snowflake. See `docs/known-issues.md` and `docs/roadmap.md`.
+**Status: alpha (0.1.0).** One source platform (Snowflake) and three target platforms were exercised against real
+accounts; everything else is written but untested and labelled so. See [what was tested](docs/environments.md#what-was-tested)
+and [what is not supported yet](#limitations).
+
+```
+your code ──detect──▶ SQL ──convert──▶ Spark SQL ──generate──▶ PySpark job ──run──▶ Iceberg on S3 / GCS
+                                                                                      │
+                          validate ◀──── counts, nulls, sums ────────────────────────┤
+                                                                                      ├─▶ Snowflake (external Iceberg table)
+                                                                                      ├─▶ AWS Glue / Athena
+                                                                                      └─▶ BigQuery (BigLake)
+```
+
+## Core capabilities
+
+| # | Capability | Command / API | Status |
+|---|---|---|---|
+| 1 | **Detect** the SQL platform and find SQL in `.sql`, `.py`, `.ipynb` | `detect`, `detect_platform()` | Snowflake tested; other dialects parse via SQLGlot |
+| 2 | **Connect** to the source (you set up authentication first) | `connectors.get_connector()` | Snowflake tested live; Postgres, MySQL, SQL Server, Oracle **experimental** (mock-tested only) |
+| 3 | **Convert** to Spark SQL and flag what cannot be trusted | `convert`, `convert_statement()` | tested |
+| 4 | **Generate a PySpark job**: JDBC read, write Iceberg, run the curation SQL | `pyspark`, `pyspark_pipeline()` | tested end to end (Snowflake to Iceberg on S3 and on GCS) |
+| 5 | **Expose** Iceberg tables to other platforms | `publish`, `publish.*Publisher` | Snowflake, AWS Glue/Athena, BigQuery all tested live |
+| 6 | **Validate** counts, non-null counts and column sums across platforms | `validate`, `validate.validate()` | tested live across four platforms |
+| 7 | **Report**: converted PySpark, plan of changes, validation results (Markdown and JSON) | all commands | tested |
+| 8 | **Trace** every step with timings, secrets redacted | `--trace trace.jsonl`, `tracing.span()` | tested |
+| 9 | **Diagnose** your environment; open a pre-filled GitHub issue | `doctor`, `issue` | tested |
+
+Safety defaults: `publish` prints a plan and changes nothing unless you pass `--apply`; credentials are only read from
+environment variables or your cloud profile; generated scripts never contain secrets.
 
 ## Install
 
-    pip install sf2iceberg              # detect and convert (needs only sqlglot)
-    pip install "sf2iceberg[pytest]"    # adds pytest plugin fixtures and local Spark
+```bash
+pip install sql2iceberg                       # core: detect + convert (needs only sqlglot)
+pip install "sql2iceberg[spark]"              # run the generated PySpark jobs locally
+pip install "sql2iceberg[snowflake,aws,gcp]"  # connectors and publishers you need
+pip install "sql2iceberg[all]"                # spark + snowflake + aws + gcp
+pip install "sql2iceberg[pytest]"             # pytest plugin and fixtures
+```
 
-## Use
+Extras: `spark`, `snowflake`, `postgres`, `mysql`, `mssql`, `oracle`, `aws`, `gcp`, `pytest`, `all`, `dev`.
 
-    sf2iceberg detect examples/            # list SQL found in .sql, .py and .ipynb files
-    sf2iceberg convert examples/ --out out # write report.json and report.md
-    sf2iceberg convert examples/ --fail-on-unsupported   # non-zero exit for CI
+## Environment dependencies (summary)
 
-Each statement ends up as one of:
-
-| status | meaning |
+| Needed for | Requirement |
 |---|---|
-| converted | no known problem found (still verify it) |
-| review | converted, but behavior may differ from Snowflake; the report says why |
-| unsupported | output is known not to run in Spark; the report says what to do |
-| unparsed / dynamic | could not parse, or built from variables (not converted) |
+| everything | Python 3.10 or newer |
+| running generated Spark jobs | **Java 17** (Java 21 should work), `pyspark` 3.5 or 4.x. Do not set `SPARK_HOME` to another Spark. |
+| Iceberg tables | Iceberg Spark runtime jar matching your Spark (we used `iceberg-spark-runtime-4.1_2.13-1.12.0`) |
+| Iceberg on S3 / GCS | `iceberg-aws-bundle` / `iceberg-gcp-bundle` jars |
+| reading the source over JDBC | the JDBC driver jar (we used `snowflake-jdbc-3.19.0`) |
+| Snowflake | account, role that can create external volumes, catalog integrations and Iceberg tables; a warehouse |
+| AWS | an AWS profile or environment credentials with S3, Glue and (to count) Athena permissions |
+| GCP | `gcloud auth login`, a project **with billing enabled**, a BigQuery connection to the bucket |
+| behind a TLS-inspecting proxy | a CA bundle for Python and a Java truststore: see [troubleshooting](docs/troubleshooting.md) |
 
-## Verify one case against Snowflake's results (offline)
+Full details, versions we tested and the list of every package and jar: [docs/environments.md](docs/environments.md) and
+[docs/packages.md](docs/packages.md). Run `sql2iceberg doctor` to check your machine.
 
-A case is a folder with `case.json`, seed CSV files and an `expected.csv` that you export from your own Snowflake
-account (run the original query on the same seed data). `verify` converts the SQL, runs it in local Spark on the
-seed data, and compares rows (order ignored by default, float tolerance, types must match):
+## Quick start
 
-    sf2iceberg verify examples/cases/qualify            # passes
-    sf2iceberg verify examples/cases/dateadd_timestamp  # fails: Spark returns a DATE, expected a timestamp
-    sf2iceberg verify examples/cases/qualify --iceberg  # same, on an Iceberg Hadoop catalog (needs the jar)
+```bash
+# 1. which platform is this code base for, and what SQL is in it?
+sql2iceberg detect path/to/code
+# 2. convert, and see what needs hand work
+sql2iceberg convert path/to/code --out out
+# 3. generate the PySpark job (reads the source over JDBC, writes Iceberg, runs the curation SQL)
+sql2iceberg pyspark path/to/code --out out --platform snowflake \
+    --catalog-type jdbc --catalog-uri jdbc:sqlite:catalog.db \
+    --warehouse s3://my-bucket/warehouse --namespace live --iceberg-version 2
+# 4. run it (set SNOWFLAKE_USER and SNOWFLAKE_PRIVATE_KEY_PATH or SNOWFLAKE_PASSWORD first)
+spark-submit out/pipeline_pyspark.py
+# 5. expose the tables: read the plan first, then --apply
+sql2iceberg publish publish.json
+sql2iceberg publish publish.json --apply
+# 6. validate across platforms
+sql2iceberg validate validate.json --out out
+```
 
-Exit code is 0 only on a pass, so it works in CI. Needs `pip install "sf2iceberg[spark]"`. The `expected.csv` values in
-`examples/cases/` were worked out by hand (the DATEADD one follows Snowflake's documented behavior): replace them with
-real exports from your account before you rely on them.
+Add `--trace trace.jsonl` to any command to record a timed trace of the run.
+Worked examples from real runs (configs, plans, results): [docs/examples.md](docs/examples.md).
 
-## Map, generate, compare
+## Python API
 
-    sf2iceberg map examples/corpus --out out            # tables each statement reads and writes (lineage.json)
-    sf2iceberg generate examples/corpus/pipelines --ddl examples/corpus/ddl --out out
-        # iceberg_spark.sql (format-version 3), snowflake_managed_iceberg.sql, pipeline_pyspark.py, warnings.txt
-    sf2iceberg sql --counts orders customers            # SQL to run in Snowflake for row counts
-    sf2iceberg compare --snowflake-counts sf.csv --iceberg-counts ice.csv --snowflake-credits 1.2 --credit-price 3
+```python
+from sql2iceberg import detect_path, convert_statement
+from sql2iceberg.pyspark_gen import MigrationConfig, pyspark_pipeline
+from sql2iceberg.publish import SnowflakePublisher, SnowflakeTarget, tables_from_jdbc_catalog
+from sql2iceberg.validate import validate, Target, ColumnSpec
 
-`examples/corpus/` is a made-up set of 45 Snowflake statements (windows, dates, VARIANT, regex, MERGE, PIVOT...).
-`python scripts/run_corpus_smoke.py` runs the converted SELECTs in local Spark. See `docs/iceberg-setup.md`.
-Snowflake DDL syntax follows Snowflake's docs but has not been run against a live account.
+stmts = detect_path("pipelines/", dialect="snowflake")
+script, report = pyspark_pipeline(stmts, MigrationConfig(platform="snowflake", warehouse="s3://b/wh",
+                                                         catalog_type="jdbc", catalog_uri="jdbc:sqlite:catalog.db"))
+```
 
-## Test your conversions with pytest
+## Documentation
 
-The plugin loads automatically. Fixtures: `sf2i_spark` (local Spark; set `SF2ICE_ICEBERG=1` for an Iceberg Hadoop catalog),
-`sf2i_convert`. Tests marked `live_snowflake` are skipped unless you pass `--live-snowflake`, because they would spend credits.
+- [Environments and what was tested](docs/environments.md)
+- [Every package, jar and service used in this build](docs/packages.md)
+- [Examples from the live tests](docs/examples.md)
+- [Troubleshooting frequent problems](docs/troubleshooting.md)
+- [Known conversion differences between Snowflake and Spark](docs/known-issues.md)
+- [Roadmap](docs/roadmap.md)
 
-    pytest -m spark
+## Getting help and reporting problems
 
-## What it does not do (yet)
+- Run `sql2iceberg doctor`, then `sql2iceberg issue --title "short summary" --open` to open a GitHub issue pre-filled with
+  your environment (names and versions only, never values or credentials).
+- Attach a trace (`--trace trace.jsonl`) after reading it. Secrets are redacted but check anyway.
+- Issues: <https://github.com/jey1987/sql2iceberg/issues>. Please read [troubleshooting](docs/troubleshooting.md) first.
+- Security problems: do not open a public issue; see [CONTRIBUTING.md](CONTRIBUTING.md#security).
 
-- Query Snowflake for you: counts, expected results and credits come from CSVs/numbers you export yourself (a live `--live-snowflake` mode is planned).
-- Rewrite unsupported constructs (it flags them).
-- Convert stored procedures, tasks or streams.
-- Iceberg-specific checks (MERGE, CTAS on Iceberg) are written but not yet run in CI.
+## Limitations
 
-## Safety
-
-- Everything in `examples/` and `tests/` is made-up SQL and data.
-- Credentials, when live mode exists, will be read from environment variables only.
-- Nothing is sent to any model or service by default.
+- Only **Snowflake as a source** and **Snowflake, AWS Glue/Athena, BigQuery as targets** were run against real systems.
+  Postgres, MySQL, SQL Server and Oracle connectors, REST/Hive catalogs, Spark 3.5, Azure and Databricks are untested.
+- Tested with Iceberg **format-version 2**. Whether Snowflake and BigQuery read v3 tables is unverified here.
+- BigQuery cannot read an S3 warehouse. The GCP path writes a second Iceberg copy to GCS.
+- Snowflake object-store tables and BigQuery tables point at one metadata file (a snapshot): refresh after new writes.
+- Validation compares counts, non-null counts and sums. It does not compare every row.
+- Tested on Windows 10 with Python 3.13. Linux and macOS should work; CI covers Linux but live tests were not run there.
+- Conversion uses [SQLGlot](https://github.com/tobymao/sqlglot); the converter flags constructs that behave differently in
+  Spark (see [known issues](docs/known-issues.md)) but a clean result still needs your own verification.
 
 ## License
 
-MIT
+MIT. Not affiliated with Snowflake, the Apache Software Foundation, Amazon or Google. "Iceberg" is a trademark of the ASF.

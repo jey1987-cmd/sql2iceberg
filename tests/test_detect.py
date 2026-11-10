@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from sf2iceberg.detect import detect_path, detect_python, detect_sql_text
+from sql2iceberg.detect import detect_path, detect_python, detect_sql_text
 
 EX = Path(__file__).parent.parent / "examples"
 
