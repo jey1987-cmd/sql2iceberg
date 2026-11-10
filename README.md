@@ -1,10 +1,21 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/jey1987-cmd/sql2iceberg/main/docs/assets/logo.png" alt="sql2iceberg: SQL to PySpark to Apache Iceberg" width="520">
+</p>
+
+<p align="center">
+  <a href="https://pypi.org/project/sql2iceberg/"><img alt="PyPI" src="https://img.shields.io/pypi/v/sql2iceberg"></a>
+  <a href="https://pypi.org/project/sql2iceberg/"><img alt="Python versions" src="https://img.shields.io/pypi/pyversions/sql2iceberg"></a>
+  <a href="https://github.com/jey1987-cmd/sql2iceberg/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/jey1987-cmd/sql2iceberg/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/jey1987-cmd/sql2iceberg/blob/main/LICENSE"><img alt="License: MIT" src="https://img.shields.io/pypi/l/sql2iceberg"></a>
+</p>
+
 # sql2iceberg
 
 Take the SQL in your code base, convert it to **PySpark**, persist the result as **Apache Iceberg** tables, expose those
 tables to **Snowflake, AWS (Glue/Athena) and GCP (BigQuery)**, and **validate** the migration.
 
-**Status: alpha (0.1.0).** One source platform (Snowflake) and three target platforms were exercised against real
-accounts; everything else is written but untested and labelled so. See [what was tested](docs/environments.md#what-was-tested)
+**Status: alpha.** One source platform (Snowflake) and three target platforms were exercised against real
+accounts; everything else is written but untested and labelled so. See [what was tested](https://github.com/jey1987-cmd/sql2iceberg/blob/main/docs/environments.md#what-was-tested)
 and [what is not supported yet](#limitations).
 
 ```
@@ -15,6 +26,18 @@ your code ──detect──▶ SQL ──convert──▶ Spark SQL ──gener
                                                                                       ├─▶ AWS Glue / Athena
                                                                                       └─▶ BigQuery (BigLake)
 ```
+
+## Table of contents
+
+- [Core capabilities](#core-capabilities)
+- [Install](#install)
+- [Environment dependencies (summary)](#environment-dependencies-summary)
+- [Quick start](#quick-start)
+- [Python API](#python-api)
+- [Documentation](#documentation)
+- [Getting help and reporting problems](#getting-help-and-reporting-problems)
+- [Limitations](#limitations)
+- [License](#license)
 
 ## Core capabilities
 
@@ -57,10 +80,10 @@ Extras: `spark`, `snowflake`, `postgres`, `mysql`, `mssql`, `oracle`, `aws`, `gc
 | Snowflake | account, role that can create external volumes, catalog integrations and Iceberg tables; a warehouse |
 | AWS | an AWS profile or environment credentials with S3, Glue and (to count) Athena permissions |
 | GCP | `gcloud auth login`, a project **with billing enabled**, a BigQuery connection to the bucket |
-| behind a TLS-inspecting proxy | a CA bundle for Python and a Java truststore: see [troubleshooting](docs/troubleshooting.md) |
+| behind a TLS-inspecting proxy | a CA bundle for Python and a Java truststore: see [troubleshooting](https://github.com/jey1987-cmd/sql2iceberg/blob/main/docs/troubleshooting.md) |
 
-Full details, versions we tested and the list of every package and jar: [docs/environments.md](docs/environments.md) and
-[docs/packages.md](docs/packages.md). Run `sql2iceberg doctor` to check your machine.
+Full details, versions we tested and the list of every package and jar: [docs/environments.md](https://github.com/jey1987-cmd/sql2iceberg/blob/main/docs/environments.md) and
+[docs/packages.md](https://github.com/jey1987-cmd/sql2iceberg/blob/main/docs/packages.md). Run `sql2iceberg doctor` to check your machine.
 
 ## Quick start
 
@@ -83,7 +106,7 @@ sql2iceberg validate validate.json --out out
 ```
 
 Add `--trace trace.jsonl` to any command to record a timed trace of the run.
-Worked examples from real runs (configs, plans, results): [docs/examples.md](docs/examples.md).
+Worked examples from real runs (configs, plans, results): [docs/examples.md](https://github.com/jey1987-cmd/sql2iceberg/blob/main/docs/examples.md).
 
 ## Python API
 
@@ -100,20 +123,20 @@ script, report = pyspark_pipeline(stmts, MigrationConfig(platform="snowflake", w
 
 ## Documentation
 
-- [Environments and what was tested](docs/environments.md)
-- [Every package, jar and service used in this build](docs/packages.md)
-- [Examples from the live tests](docs/examples.md)
-- [Troubleshooting frequent problems](docs/troubleshooting.md)
-- [Known conversion differences between Snowflake and Spark](docs/known-issues.md)
-- [Roadmap](docs/roadmap.md)
+- [Environments and what was tested](https://github.com/jey1987-cmd/sql2iceberg/blob/main/docs/environments.md)
+- [Every package, jar and service used in this build](https://github.com/jey1987-cmd/sql2iceberg/blob/main/docs/packages.md)
+- [Examples from the live tests](https://github.com/jey1987-cmd/sql2iceberg/blob/main/docs/examples.md)
+- [Troubleshooting frequent problems](https://github.com/jey1987-cmd/sql2iceberg/blob/main/docs/troubleshooting.md)
+- [Known conversion differences between Snowflake and Spark](https://github.com/jey1987-cmd/sql2iceberg/blob/main/docs/known-issues.md)
+- [Roadmap](https://github.com/jey1987-cmd/sql2iceberg/blob/main/docs/roadmap.md)
 
 ## Getting help and reporting problems
 
 - Run `sql2iceberg doctor`, then `sql2iceberg issue --title "short summary" --open` to open a GitHub issue pre-filled with
   your environment (names and versions only, never values or credentials).
 - Attach a trace (`--trace trace.jsonl`) after reading it. Secrets are redacted but check anyway.
-- Issues: <https://github.com/jey1987-cmd/sql2iceberg/issues>. Please read [troubleshooting](docs/troubleshooting.md) first.
-- Security problems: do not open a public issue; see [CONTRIBUTING.md](CONTRIBUTING.md#security).
+- Issues: <https://github.com/jey1987-cmd/sql2iceberg/issues>. Please read [troubleshooting](https://github.com/jey1987-cmd/sql2iceberg/blob/main/docs/troubleshooting.md) first.
+- Security problems: do not open a public issue; see [CONTRIBUTING.md](https://github.com/jey1987-cmd/sql2iceberg/blob/main/CONTRIBUTING.md#security).
 
 ## Limitations
 
@@ -125,7 +148,7 @@ script, report = pyspark_pipeline(stmts, MigrationConfig(platform="snowflake", w
 - Validation compares counts, non-null counts and sums. It does not compare every row.
 - Tested on Windows 10 with Python 3.13. Linux and macOS should work; CI covers Linux but live tests were not run there.
 - Conversion uses [SQLGlot](https://github.com/tobymao/sqlglot); the converter flags constructs that behave differently in
-  Spark (see [known issues](docs/known-issues.md)) but a clean result still needs your own verification.
+  Spark (see [known issues](https://github.com/jey1987-cmd/sql2iceberg/blob/main/docs/known-issues.md)) but a clean result still needs your own verification.
 
 ## License
 

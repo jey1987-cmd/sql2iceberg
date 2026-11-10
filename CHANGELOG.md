@@ -3,6 +3,18 @@
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/),
 and the project uses [Semantic Versioning](https://semver.org/). While the version is below 1.0, minor releases may change behaviour.
 
+## [0.1.1] - 2026-11-09
+
+Documentation-only release: improves the PyPI project page. No code changes.
+
+### Added
+- Logo banner and status badges (PyPI version, Python versions, CI, license) at the top of the README.
+- Table of contents in the README.
+
+### Fixed
+- README links to the docs, changelog, contributing guide and license were relative, so they did not resolve on the PyPI
+  page. They are now absolute GitHub URLs.
+
 ## [0.1.0] - 2026-11-09
 
 First public release (alpha). Published on PyPI as [`sql2iceberg`](https://pypi.org/project/sql2iceberg/).
@@ -45,4 +57,5 @@ Snowflake, AWS Athena and BigQuery. 38 validation checks across 4 tables and 4 p
 - Validation proves counts, non-null counts and sums, not row-by-row equality.
 - Live tests ran on Windows 10 with Python 3.13 only.
 
+[0.1.1]: https://github.com/jey1987-cmd/sql2iceberg/releases/tag/v0.1.1
 [0.1.0]: https://github.com/jey1987-cmd/sql2iceberg/releases/tag/v0.1.0
