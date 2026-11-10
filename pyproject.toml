@@ -29,10 +29,10 @@ classifiers = [
 dependencies = ["sqlglot>=30"]
 
 [project.urls]
-Homepage = "https://github.com/jey1987/sql2iceberg"
-Documentation = "https://github.com/jey1987/sql2iceberg/tree/main/docs"
-Issues = "https://github.com/jey1987/sql2iceberg/issues"
-Changelog = "https://github.com/jey1987/sql2iceberg/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/jey1987-cmd/sql2iceberg"
+Documentation = "https://github.com/jey1987-cmd/sql2iceberg/tree/main/docs"
+Issues = "https://github.com/jey1987-cmd/sql2iceberg/issues"
+Changelog = "https://github.com/jey1987-cmd/sql2iceberg/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 spark = ["pyspark>=3.5"]

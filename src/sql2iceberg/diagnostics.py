@@ -17,7 +17,7 @@ from urllib.parse import quote
 
 from . import __version__
 
-REPO = "jey1987/sql2iceberg"
+REPO = "jey1987-cmd/sql2iceberg"
 ISSUES_URL = f"https://github.com/{REPO}/issues"
 
 # (distribution name, needed for)

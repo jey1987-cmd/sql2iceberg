@@ -112,7 +112,7 @@ script, report = pyspark_pipeline(stmts, MigrationConfig(platform="snowflake", w
 - Run `sql2iceberg doctor`, then `sql2iceberg issue --title "short summary" --open` to open a GitHub issue pre-filled with
   your environment (names and versions only, never values or credentials).
 - Attach a trace (`--trace trace.jsonl`) after reading it. Secrets are redacted but check anyway.
-- Issues: <https://github.com/jey1987/sql2iceberg/issues>. Please read [troubleshooting](docs/troubleshooting.md) first.
+- Issues: <https://github.com/jey1987-cmd/sql2iceberg/issues>. Please read [troubleshooting](docs/troubleshooting.md) first.
 - Security problems: do not open a public issue; see [CONTRIBUTING.md](CONTRIBUTING.md#security).
 
 ## Limitations

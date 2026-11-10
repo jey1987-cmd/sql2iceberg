@@ -99,5 +99,5 @@ def test_doctor_lists_packages_and_never_prints_env_values(monkeypatch):
 def test_issue_url_points_at_repo_and_has_no_secret(monkeypatch):
     monkeypatch.setenv("AWS_PROFILE", "my-private-profile")
     url = diagnostics.issue_url("Crash on glue")
-    assert url.startswith("https://github.com/jey1987/sql2iceberg/issues/new?template=bug_report.yml")
+    assert url.startswith("https://github.com/jey1987-cmd/sql2iceberg/issues/new?template=bug_report.yml")
     assert "my-private-profile" not in url
