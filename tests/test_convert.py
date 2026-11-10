@@ -17,8 +17,8 @@ def test_qualify_converts_cleanly():
 @pytest.mark.parametrize(
     "sql,code",
     [
-        ("SELECT f.value:sku::string FROM events e, LATERAL FLATTEN(input => e.payload:items) f", "FLATTEN"),
-        ("SELECT k, LISTAGG(v, ',') WITHIN GROUP (ORDER BY v) FROM t GROUP BY k", "WITHIN_GROUP"),
+        ("SELECT f.key FROM events e, LATERAL FLATTEN(input => e.payload:items) f", "FLATTEN"),
+        ("SELECT k, LISTAGG(v, ',') WITHIN GROUP (ORDER BY v ASC, w DESC) FROM t GROUP BY k", "WITHIN_GROUP"),
         ("SELECT SEQ4() FROM TABLE(GENERATOR(ROWCOUNT => 10))", "GENERATOR"),
     ],
 )
@@ -63,3 +63,36 @@ def test_try_functions_stay_safe(sql, expected):
 
 def test_plain_to_date_is_not_made_safe():
     assert "TRY_" not in convert_statement("SELECT TO_DATE(c) FROM t").spark_sql
+
+
+def test_flatten_value_becomes_lateral_view_explode():
+    r = convert_statement("SELECT f.value:sku::string AS sku FROM events e, LATERAL FLATTEN(input => e.payload:items) f")
+    assert r.status == REVIEW and "FLATTEN_JSON" in codes(r)
+    assert "LATERAL VIEW EXPLODE(FROM_JSON(GET_JSON_OBJECT(e.payload, '$.items'), 'array<string>')) f AS value" in r.spark_sql
+
+
+def test_listagg_within_group_becomes_sorted_array_join():
+    r = convert_statement("SELECT k, LISTAGG(DISTINCT v, ',') WITHIN GROUP (ORDER BY v) FROM t GROUP BY k")
+    assert r.status == CONVERTED and "WITHIN GROUP" not in r.spark_sql
+    assert "SORT_ARRAY(COLLECT_SET(v), TRUE)" in r.spark_sql and "ARRAY_JOIN" in r.spark_sql
+
+
+def test_array_agg_within_group_inside_array_to_string():
+    r = convert_statement("SELECT ARRAY_TO_STRING(ARRAY_AGG(id) WITHIN GROUP (ORDER BY id), '|') FROM t")
+    assert r.status == CONVERTED and "WITHIN GROUP" not in r.spark_sql and "SORT_ARRAY(COLLECT_LIST(id), TRUE)" in r.spark_sql
+
+
+def test_percentile_cont_is_exact_not_approximate():
+    r = convert_statement("SELECT PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY amount) FROM o")
+    assert "PERCENTILE(amount, 0.9)" in r.spark_sql and "APPROX" not in r.spark_sql
+
+
+def test_datediff_counts_boundaries_like_snowflake():
+    r = convert_statement("SELECT DATEDIFF('day', a, b), DATEDIFF(month, a, b) FROM o")
+    assert "DATEDIFF(DAY, CAST(a AS DATE), CAST(b AS DATE))" in r.spark_sql
+    assert "DATEDIFF(MONTH, DATE_TRUNC('MONTH', a), DATE_TRUNC('MONTH', b))" in r.spark_sql
+
+
+def test_array_size_of_variant_path_parses_json_first():
+    r = convert_statement("SELECT ARRAY_SIZE(p:items) FROM o")
+    assert "SIZE(FROM_JSON(GET_JSON_OBJECT(p, '$.items'), 'array<string>'))" in r.spark_sql

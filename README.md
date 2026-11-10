@@ -18,6 +18,12 @@ tables to **Snowflake, AWS (Glue/Athena) and GCP (BigQuery)**, and **validate** 
 parsed and converted (any dialect SQLGlot supports can be added). The full path, source to Iceberg to three target platforms, was
 run against real Snowflake, AWS and Google Cloud accounts; the other databases are experimental.
 
+**New to this? In plain words:** you point the tool at a folder of SQL files. For each file it writes a PySpark script that copies the
+tables it needs from your database, does the same transformation, and saves the result as an Iceberg table. Simple queries stay as
+SQL; complex ones (CTEs, subqueries, window functions, UNION, PIVOT) are built step by step with PySpark DataFrames. The output folder
+has a README with the order to run things in, and a ready-made check that compares the results with your original SQL.
+**[Start with the step-by-step guide](https://github.com/jey1987-cmd/sql2iceberg/blob/main/docs/getting-started.md)**, no Spark knowledge needed.
+
 **Status: alpha.** One source platform (Snowflake) and three target platforms were exercised against real
 accounts; everything else is written but untested and labelled so. See [what was tested](https://github.com/jey1987-cmd/sql2iceberg/blob/main/docs/environments.md#what-was-tested)
 and [what is not supported yet](#limitations).
@@ -34,6 +40,7 @@ your code ──detect──▶ SQL ──convert──▶ Spark SQL ──gener
 ## Table of contents
 
 - [Core capabilities](#core-capabilities)
+- [Step-by-step guide for beginners](https://github.com/jey1987-cmd/sql2iceberg/blob/main/docs/getting-started.md)
 - [Install](#install)
 - [Environment dependencies (summary)](#environment-dependencies-summary)
 - [Quick start](#quick-start)
@@ -50,7 +57,7 @@ your code ──detect──▶ SQL ──convert──▶ Spark SQL ──gener
 | 1 | **Detect** the SQL platform and find SQL in `.sql`, `.py`, `.ipynb` | `detect`, `detect_platform()` | Snowflake tested; other dialects parse via SQLGlot |
 | 2 | **Connect** to the source (you set up authentication first) | `connectors.get_connector()` | Snowflake tested live; Postgres, MySQL, SQL Server, Oracle **experimental** (mock-tested only) |
 | 3 | **Convert** to Spark SQL and flag what cannot be trusted | `convert`, `convert_statement()` | tested |
-| 4 | **Generate a PySpark job**: JDBC read, write Iceberg, run the curation SQL | `pyspark`, `pyspark_pipeline()` | tested end to end (Snowflake to Iceberg on S3 and on GCS) |
+| 4 | **Generate PySpark jobs**, one per SQL file: JDBC read, write Iceberg; Spark SQL for simple statements, DataFrame steps mixed with Spark SQL for complex ones | `pyspark`, `pyspark_scripts()` | tested end to end (Snowflake to Iceberg on S3 and on GCS) |
 | 5 | **Expose** Iceberg tables to other platforms | `publish`, `publish.*Publisher` | Snowflake, AWS Glue/Athena, BigQuery all tested live |
 | 6 | **Validate** counts, non-null counts and column sums across platforms | `validate`, `validate.validate()` | tested live across four platforms |
 | 7 | **Report**: converted PySpark, plan of changes, validation results (Markdown and JSON) | all commands | tested |
@@ -94,20 +101,33 @@ Full details, versions we tested and the list of every package and jar: [docs/en
 ```bash
 # 1. which platform is this code base for, and what SQL is in it? (add --platform postgres|mysql|mssql|oracle|snowflake to override)
 sql2iceberg detect path/to/code
-# 2. convert, and see what needs hand work
-sql2iceberg convert path/to/code --out out
-# 3. generate the PySpark job (reads the source over JDBC, writes Iceberg, runs the curation SQL)
-sql2iceberg pyspark path/to/code --out out --platform snowflake \
-    --catalog-type jdbc --catalog-uri jdbc:sqlite:catalog.db \
-    --warehouse s3://my-bucket/warehouse --namespace live --iceberg-version 2
-# 4. run it (set SNOWFLAKE_USER and SNOWFLAKE_PRIVATE_KEY_PATH or SNOWFLAKE_PASSWORD first)
-spark-submit out/pipeline_pyspark.py
-# 5. expose the tables: read the plan first, then --apply
+# 2. generate one PySpark script per SQL file, plus a README, a run order and reports
+sql2iceberg pyspark path/to/code --out out --platform snowflake --source-schema MY_DB.MY_SCHEMA     --jdbc-url "jdbc:snowflake://<account>.snowflakecomputing.com/?warehouse=<WH>&role=<ROLE>" --warehouse ./warehouse
+#    for S3 use: --catalog-type jdbc --catalog-uri jdbc:sqlite:catalog.db --warehouse s3://my-bucket/warehouse --namespace live
+# 3. read out/README.md (what was generated, in which order to run it, what to double-check), then run it
+#    (set SNOWFLAKE_USER and SNOWFLAKE_PRIVATE_KEY_PATH or SNOWFLAKE_PASSWORD first)
+python out/run_all.py
+# 4. check the results against your original SQL (row counts, non-empty counts, column sums)
+sql2iceberg validate out/reports/validate.json --out out/reports
+# 5. expose the tables to other platforms: read the plan first, then --apply
 sql2iceberg publish publish.json
 sql2iceberg publish publish.json --apply
-# 6. validate across platforms
-sql2iceberg validate validate.json --out out
 ```
+
+What `sql2iceberg pyspark` writes:
+
+```
+out/
+  README.md                         start here: scripts in run order, what needs attention
+  run_all.py                        runs all scripts in the right order
+  scripts/<sql file>_pyspark.py     one PySpark script per SQL file
+  reports/conversion_report.md      every statement: how it was converted, what to check
+  reports/validate.json             ready-made check of the results (step 4)
+```
+
+`--mode auto` (default) keeps simple statements as Spark SQL and builds complex ones from DataFrame steps; `--mode sql` and
+`--mode mixed` force one style; `--combined` also writes a single `scripts/pipeline_pyspark.py`. To convert without generating
+code, use `sql2iceberg convert path/to/code --out out`.
 
 Add `--trace trace.jsonl` to any command to record a timed trace of the run.
 Worked examples from real runs (configs, plans, results): [docs/examples.md](https://github.com/jey1987-cmd/sql2iceberg/blob/main/docs/examples.md).
@@ -127,6 +147,7 @@ script, report = pyspark_pipeline(stmts, MigrationConfig(platform="snowflake", w
 
 ## Documentation
 
+- [Getting started: step by step, no experience needed](https://github.com/jey1987-cmd/sql2iceberg/blob/main/docs/getting-started.md)
 - [Environments and what was tested](https://github.com/jey1987-cmd/sql2iceberg/blob/main/docs/environments.md)
 - [Every package, jar and service used in this build](https://github.com/jey1987-cmd/sql2iceberg/blob/main/docs/packages.md)
 - [Examples from the live tests](https://github.com/jey1987-cmd/sql2iceberg/blob/main/docs/examples.md)

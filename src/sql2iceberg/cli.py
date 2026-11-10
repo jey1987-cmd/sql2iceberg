@@ -59,10 +59,14 @@ def _main(argv: list[str]) -> int:
     g.add_argument("--out", required=True)
     g.add_argument("--external-volume", help="Snowflake external volume name (optional)")
     g.add_argument("--iceberg-version", type=int, default=2, choices=(2, 3))
-    pg = sub.add_parser("pyspark", help="generate a PySpark script: JDBC ingest to Iceberg, then curation SQL")
+    pg = sub.add_parser("pyspark", help="generate one PySpark script per SQL file: JDBC ingest to Iceberg, then the transformation")
     pg.add_argument("path", help="code folder or file (.sql, .py, .ipynb)")
     pg.add_argument("--out", required=True, help="output folder")
     pg.add_argument("--platform", help="source platform (default: detected from the code)")
+    pg.add_argument("--mode", default="auto", choices=("auto", "sql", "mixed"),
+                    help="auto: Spark SQL for simple statements, DataFrame steps mixed with Spark SQL for complex ones "
+                         "(CTEs, subqueries, windows, set operations, pivots); sql: Spark SQL only; mixed: DataFrame API wherever possible")
+    pg.add_argument("--combined", action="store_true", help="also write one pipeline_pyspark.py with every statement")
     pg.add_argument("--catalog", default="lake")
     pg.add_argument("--namespace", default="db")
     pg.add_argument("--catalog-type", default="hadoop", choices=("hadoop", "jdbc", "glue", "rest", "hive"),
@@ -145,8 +149,9 @@ def _main(argv: list[str]) -> int:
 
     if args.cmd == "pyspark":
         from .connectors import REGISTRY
+        from .output import validate_config, write_output_folder
         from .platforms import detect_platform
-        from .pyspark_gen import MigrationConfig, pyspark_pipeline
+        from .pyspark_gen import MigrationConfig, pyspark_outputs, pyspark_pipeline
 
         platform = args.platform or detect_platform(args.path)["platform"]
         if not platform:
@@ -161,12 +166,21 @@ def _main(argv: list[str]) -> int:
             **({"iceberg_package": "", "jdbc_package": ""} if args.no_maven else {}),
         )
         stmts = detect_path(args.path, dialect=REGISTRY[platform].sqlglot_dialect)
-        script, rep = pyspark_pipeline(stmts, cfg)
-        out = Path(args.out)
-        out.mkdir(parents=True, exist_ok=True)
-        (out / "pipeline_pyspark.py").write_text(script, encoding="utf-8")
-        bad = [r for r in rep if r["status"] in ("unsupported", "unparsed", "skipped")]
-        print(f"platform={platform}; wrote {out / 'pipeline_pyspark.py'}; {len(rep)} statements, {len(bad)} need hand work")
+        infos = pyspark_outputs(stmts, cfg, mode=args.mode)
+        combined = pyspark_pipeline(stmts, cfg, mode=args.mode)[0] if args.combined else None
+        write_output_folder(infos, Path(args.out), platform=platform, mode=args.mode, catalog=cfg.catalog,
+                            namespace=cfg.namespace, warehouse=cfg.warehouse, combined=combined,
+                            validate=validate_config(stmts, cfg, REGISTRY[platform].sqlglot_dialect))
+        bad = 0
+        for i in infos:
+            kinds = {k: sum(1 for r in i.report if r["strategy"] == k) for k in ("spark_sql", "mixed")}
+            hand = [r for r in i.report if r["status"] in ("unsupported", "unparsed", "skipped")]
+            bad += len(hand)
+            print(f"  scripts/{i.name}: {kinds['spark_sql']} Spark SQL, {kinds['mixed']} DataFrame+SQL"
+                  + (f", {len(hand)} need hand work" if hand else ""))
+        total = sum(len(i.report) for i in infos)
+        print(f"platform={platform}; wrote {len(infos)} script(s) to {Path(args.out) / 'scripts'}; {total} statements, {bad} need hand work")
+        print(f"start with {Path(args.out) / 'README.md'} (run order, what to check); run everything with: python {Path(args.out) / 'run_all.py'}")
         return 0
 
     if args.cmd == "publish":

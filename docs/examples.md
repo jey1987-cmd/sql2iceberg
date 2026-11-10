@@ -43,6 +43,11 @@ script, report = pyspark_pipeline(detect_path("07_curated_orders.sql", dialect="
 open("pipeline_pyspark.py", "w").write(script)
 ```
 
+The command line writes one script per SQL file instead (`sql2iceberg pyspark <folder> --out out ...` gives `out/<file>_pyspark.py`; add
+`--combined` for the single file above). Simple statements stay Spark SQL; complex ones (CTEs, subqueries, windows, set operations,
+PIVOT, several joins) become DataFrame steps mixed with Spark SQL. `--mode sql` forces Spark SQL only, `--mode mixed` forces DataFrame steps.
+In Python: `pyspark_scripts(statements, cfg)` returns `{script name: (script, report)}`.
+
 Run it with Java 17, `SPARK_HOME` unset, and the login in the environment (key-pair shown):
 
 ```bash
@@ -115,6 +120,10 @@ CREATE OR REPLACE EXTERNAL TABLE `<project>.<dataset>.customers`
 ```
 
 ## 4. Validate
+
+The quickest check is the one `sql2iceberg pyspark` writes for you: `sql2iceberg validate out/reports/validate.json --out out/reports`
+compares your original SELECTs (run on the source, nothing is created there) with the Iceberg tables, using a `spark` target. The example
+below compares several platforms with each other.
 
 `validate.json`:
 ```json

@@ -2,8 +2,18 @@
 
 Observed with SQLGlot 30.30.0 and PySpark 3.5.6 on made-up queries (no Snowflake account used).
 
-Unsupported (output fails in Spark 3.5): FLATTEN (EXPLODE(input => ...)), ARRAY_AGG/LISTAGG ... WITHIN GROUP,
-SEQ4/GENERATOR. SQLGlot does not raise for these even with unsupported_level=RAISE.
+Unsupported (output fails in Spark): SEQ4/GENERATOR, FLATTEN that uses KEY/PATH/SEQ/THIS, WITHIN GROUP with mixed ASC/DESC keys.
+SQLGlot does not raise for these even with unsupported_level=RAISE.
+
+Rewritten by sql2iceberg since 0.2.0 (SQLGlot's direct translation failed in Spark or gave other results):
+`LISTAGG`/`ARRAY_AGG ... WITHIN GROUP` become a sorted `collect_list`/`collect_set` plus `array_join`; `LATERAL FLATTEN` (VALUE/INDEX only)
+becomes `LATERAL VIEW [POS]EXPLODE(from_json(col, 'array<string>'))` and is flagged `FLATTEN_JSON` (assumes JSON text, as VARIANT/ARRAY
+columns arrive over JDBC); `PERCENTILE_CONT` becomes the exact `percentile` (SQLGlot gave `percentile_approx`); `DATEDIFF(day|month|
+quarter|year, ...)` counts calendar boundaries like Snowflake (Spark counts elapsed units on timestamps); `ARRAY_SIZE(variant:path)`
+parses the JSON first. Checked against a live Snowflake account on 100 table-level checks; see CHANGELOG.
+
+Known remaining difference: Snowflake truncates a windowed `AVG` over `NUMBER(p,2)` to 5 decimals, Spark keeps 6 and rounds
+(sums of such columns differ around the 8th significant digit).
 
 Review (runs, but may differ from Snowflake; confirm on your own Snowflake account):
 DATEADD on timestamps returns a DATE; division by zero is NULL in Spark 3.5 and an error in Snowflake;

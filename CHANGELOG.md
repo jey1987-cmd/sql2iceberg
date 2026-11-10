@@ -3,6 +3,30 @@
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/),
 and the project uses [Semantic Versioning](https://semver.org/). While the version is below 1.0, minor releases may change behaviour.
 
+## [0.2.0] - 2026-11-10
+
+### Changed
+- `sql2iceberg pyspark` now writes **one standalone script per SQL file** (`<file>_pyspark.py`), each ingesting only the source tables
+  it reads and naming the scripts that must run first when it reads a table another file creates. `--combined` also writes the old
+  single `pipeline_pyspark.py`. The Python API gains `pyspark_scripts()`; `pyspark_pipeline()` is unchanged apart from a `mode` argument.
+- New `--mode auto|sql|mixed`. `auto` (default) keeps **simple** statements as Spark SQL and builds **complex** ones (CTEs, subqueries,
+  window functions, set operations, PIVOT, LATERAL VIEW, several joins) as a mix: each CTE is its own DataFrame step built with the
+  DataFrame API (`join`, `where`, `groupBy().agg()`, `select`, `union`, `orderBy`, pivot, explode) with expressions kept as `F.expr(...)`.
+  A step the builder cannot express is run with `spark.sql` against the earlier steps (registered as temp views). CTAS is written with
+  `writeTo(...).createOrReplace()`, INSERT ... SELECT with an `append_df` helper.
+- A plain `CREATE TABLE` is now emitted as Iceberg DDL instead of being skipped (it is skipped only for tables that are ingested).
+
+### Fixed (conversion results that differed from Snowflake or did not run in Spark)
+- `LISTAGG` / `ARRAY_AGG ... WITHIN GROUP (ORDER BY ...)` are rewritten to a sorted `collect_list`/`collect_set` and `array_join`
+  (previously "unsupported", not generated).
+- `LATERAL FLATTEN(input => col)` using `value` / `index` becomes `LATERAL VIEW [POS]EXPLODE(from_json(col, 'array<string>'))`
+  (previously "unsupported"). Flagged `FLATTEN_JSON`: it assumes the column holds JSON text, as VARIANT/ARRAY do over JDBC.
+- `PERCENTILE_CONT` now becomes the exact `percentile` (SQLGlot produced the approximate `percentile_approx`: p90 1088.48 vs 1067.42).
+- `DATEDIFF(day|month|quarter|year, a, b)` counts boundaries like Snowflake (day on timestamps differed: 301 vs 342).
+- `ARRAY_SIZE(variant:path)` no longer produces `SIZE(get_json_object(...))`, which Spark rejects.
+- Generated Snowflake ingest reads `TIMESTAMP_TZ` / `TIMESTAMP_LTZ` columns as UTC `TIMESTAMP_NTZ` (Spark's JDBC reader failed with
+  `UNRECOGNIZED_SQL_TYPE`).
+
 ## [0.1.3] - 2026-11-10
 
 ### Fixed

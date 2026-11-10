@@ -123,7 +123,7 @@ def test_cli_pyspark_accepts_documented_flags(tmp_path):
                "--catalog-uri", "jdbc:sqlite:catalog.db", "--warehouse", "s3://bkt/wh", "--namespace", "live",
                "--iceberg-version", "2", "--region", "eu-west-1", "--jars", "a.jar,b.jar", "--no-maven"])
     assert rc == 0
-    text = (out / "pipeline_pyspark.py").read_text()
+    text = (out / "scripts" / "q_pyspark.py").read_text()
     compile(text, "p.py", "exec")
     assert "JdbcCatalog" in text and "eu-west-1" in text and "a.jar,b.jar" in text and "jars.packages" not in text
     assert "lake.live.t" in text and "'src_tbl'" in text
@@ -137,5 +137,145 @@ def test_cli_pyspark_gcs_flags(tmp_path):
     assert main(["pyspark", str(sql), "--out", str(tmp_path / "o"), "--platform", "snowflake", "--jdbc-url", "jdbc:x",
                  "--catalog-type", "jdbc", "--catalog-uri", "jdbc:sqlite:c.db", "--warehouse", "gs://b/wh",
                  "--gcs-project", "p1", "--gcs-token-from-env"]) == 0
-    text = (tmp_path / "o" / "pipeline_pyspark.py").read_text()
+    text = (tmp_path / "o" / "scripts" / "q_pyspark.py").read_text()
     assert "GCSFileIO" in text and "os.environ['GCS_OAUTH_TOKEN']" in text
+
+
+# ---- one script per SQL file; Spark SQL for simple statements, DataFrame API mixed in for complex ones ----
+from sql2iceberg.detect import detect_path
+from sql2iceberg.pyspark_gen import pyspark_scripts
+
+SIMPLE = "CREATE OR REPLACE TABLE s AS SELECT status, COUNT(*) AS n FROM orders GROUP BY status;"
+COMPLEX = """
+CREATE OR REPLACE TABLE c AS
+WITH big AS (SELECT customer_id, SUM(amount) AS spend FROM orders GROUP BY customer_id HAVING SUM(amount) > 10)
+SELECT cu.name, b.spend, RANK() OVER (ORDER BY b.spend DESC) AS rnk
+FROM customers cu JOIN big b ON b.customer_id = cu.customer_id;
+"""
+CFG = {"jdbc_url": "jdbc:snowflake://x.snowflakecomputing.com/"}
+
+
+def _scripts(tmp_path, **files):
+    for name, text in files.items():
+        (tmp_path / name).write_text(text)
+    return pyspark_scripts(detect_path(tmp_path), MigrationConfig(**CFG))
+
+
+def test_one_script_per_sql_file_each_with_only_its_sources(tmp_path):
+    out = _scripts(tmp_path, **{"a.sql": SIMPLE, "b.sql": COMPLEX})
+    assert sorted(out) == ["a_pyspark.py", "b_pyspark.py"]
+    for script, _ in out.values():
+        compile(script, "x.py", "exec")
+    assert "'orders'" in out["a_pyspark.py"][0] and "'customers'" not in out["a_pyspark.py"][0]
+    assert "'customers'" in out["b_pyspark.py"][0] and "'orders'" in out["b_pyspark.py"][0]
+
+
+def test_simple_statement_stays_spark_sql(tmp_path):
+    script, report = _scripts(tmp_path, **{"a.sql": SIMPLE})["a_pyspark.py"]
+    assert report[0]["strategy"] == "spark_sql" and 'spark.sql("""CREATE OR REPLACE TABLE lake.db.s USING iceberg' in script
+    assert "functions as F" not in script
+
+
+def test_complex_statement_mixes_dataframe_api_and_writes_with_writeto(tmp_path):
+    script, report = _scripts(tmp_path, **{"b.sql": COMPLEX})["b_pyspark.py"]
+    assert report[0]["strategy"] == "mixed" and report[0]["df_steps"] >= 2
+    assert "df_big = (" in script and ".groupBy(" in script and ".join(df_big.alias('b')" in script
+    assert "result.writeTo('lake.db.c')" in script and "functions as F" in script
+    assert "CTE" in report[0]["note"] and "window function" in report[0]["note"]
+
+
+def test_mode_sql_forces_spark_sql_and_mode_mixed_forces_dataframes(tmp_path):
+    (tmp_path / "a.sql").write_text(SIMPLE)
+    stmts = detect_path(tmp_path)
+    cfg = MigrationConfig(**CFG)
+    _, rep = pyspark_scripts(stmts, cfg, mode="sql")["a_pyspark.py"]
+    assert rep[0]["strategy"] == "spark_sql"
+    script, rep = pyspark_scripts(stmts, cfg, mode="mixed")["a_pyspark.py"]
+    assert rep[0]["strategy"] == "mixed" and ".groupBy(" in script
+    with pytest.raises(ValueError):
+        pyspark_scripts(stmts, cfg, mode="nope")
+
+
+def test_step_the_builder_cannot_express_falls_back_to_spark_sql_for_that_step_only(tmp_path):
+    sql = """CREATE TABLE r AS WITH m AS (SELECT status, SUM(amount) AS s, SUM(SUM(amount)) OVER (ORDER BY status) AS run
+    FROM orders GROUP BY status) SELECT status, s, run FROM m WHERE s > 0;"""
+    script, report = _scripts(tmp_path, **{"c.sql": sql})["c_pyspark.py"]
+    assert report[0]["df_steps"] == 1 and report[0]["sql_steps"] == 1
+    assert "# CTE m: Spark SQL" in script and "df_m.createOrReplaceTempView('m')" in script
+    assert "# final SELECT: DataFrame API" in script
+
+
+def test_recursive_cte_stays_spark_sql(tmp_path):
+    sql = "CREATE TABLE cal AS WITH RECURSIVE c (d) AS (SELECT 1 UNION ALL SELECT d + 1 FROM c WHERE d < 5) SELECT d FROM c;"
+    _script, report = _scripts(tmp_path, **{"r.sql": sql})["r_pyspark.py"]
+    assert report[0]["strategy"] == "spark_sql" and "recursive CTE" in report[0]["note"]
+
+
+def test_previously_unsupported_statements_are_now_generated(tmp_path):
+    sql = "CREATE TABLE t AS SELECT f.value::string AS tag, COUNT(*) AS n FROM customers c, LATERAL FLATTEN(input => c.tags) f GROUP BY f.value::string;"
+    script, report = _scripts(tmp_path, **{"f.sql": sql})["f_pyspark.py"]
+    assert report[0]["status"] == "review" and "NOT GENERATED" not in script
+    assert "F.explode(" in script and "writeTo('lake.db.t')" in script
+
+
+def test_insert_select_uses_append_helper_and_create_table_becomes_ddl(tmp_path):
+    sql = """CREATE TABLE tgt (a NUMBER, b VARCHAR);
+    INSERT INTO tgt (a, b) WITH x AS (SELECT id FROM src) SELECT id, 'k' FROM x;"""
+    script, _ = _scripts(tmp_path, **{"i.sql": sql})["i_pyspark.py"]
+    assert 'spark.sql("""CREATE TABLE lake.db.tgt (a DECIMAL(38, 0), b STRING) USING iceberg' in script
+    assert "def append_df(" in script and "append_df(result, 'lake.db.tgt', ['a', 'b'])" in script
+    compile(script, "i.py", "exec")
+
+
+def test_script_header_names_the_scripts_it_depends_on(tmp_path):
+    out = _scripts(tmp_path, **{"a.sql": "CREATE TABLE mid AS SELECT x FROM base;", "b.sql": "CREATE TABLE fin AS SELECT x FROM mid;"})
+    assert "a_pyspark.py (mid)" in out["b_pyspark.py"][0] and "'mid'" not in out["b_pyspark.py"][0].split("curation")[0].split("SOURCES =")[1].split("spark =")[0]
+
+
+def test_cli_writes_one_script_per_file_and_combined_on_request(tmp_path):
+    from sql2iceberg.cli import main
+
+    (tmp_path / "one.sql").write_text(SIMPLE)
+    (tmp_path / "two.sql").write_text(COMPLEX)
+    out = tmp_path / "out"
+    args = ["pyspark", str(tmp_path), "--out", str(out), "--platform", "snowflake", "--jdbc-url", "jdbc:x"]
+    assert main(args) == 0
+    assert sorted(p.name for p in (out / "scripts").glob("*.py")) == ["one_pyspark.py", "two_pyspark.py"]
+    assert main([*args, "--combined", "--mode", "sql"]) == 0
+    assert (out / "scripts" / "pipeline_pyspark.py").exists()
+
+
+def test_output_folder_is_organized_with_readme_run_order_and_reports(tmp_path):
+    from sql2iceberg.cli import main
+
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "a.sql").write_text("CREATE TABLE mid AS SELECT x FROM base;")
+    (tmp_path / "src" / "b.sql").write_text("CREATE TABLE fin AS SELECT DATEADD(day, 1, x) AS y FROM mid;")
+    out = tmp_path / "out"
+    assert main(["pyspark", str(tmp_path / "src"), "--out", str(out), "--platform", "snowflake", "--jdbc-url", "jdbc:x"]) == 0
+    assert {p.name for p in out.iterdir()} == {"README.md", "run_all.py", "scripts", "reports"}
+    assert {p.name for p in (out / "reports").iterdir()} == {"conversion_report.md", "conversion_report.json", "validate.json"}
+    readme = (out / "README.md").read_text()
+    assert readme.index("a_pyspark.py") < readme.index("b_pyspark.py")           # run order: a creates what b reads
+    assert "Converted, but please check" in readme and "DATEADD" in readme
+    compile((out / "run_all.py").read_text(), "run_all.py", "exec")
+    assert "ORDER = ['a_pyspark.py', 'b_pyspark.py']" in (out / "run_all.py").read_text()
+    report = (out / "reports" / "conversion_report.md").read_text()
+    assert "REVIEW DATEADD" in report and "Approach: Spark SQL" in report
+
+
+def test_validate_config_uses_original_selects_and_qualifies_source_tables(tmp_path):
+    from sql2iceberg.output import validate_config
+
+    (tmp_path / "a.sql").write_text(
+        "CREATE TABLE s AS WITH x AS (SELECT a FROM t) SELECT a FROM x;\n"
+        "INSERT INTO d (a) SELECT a FROM t;\nINSERT INTO d (a) VALUES (1), (2);")
+    cfg = MigrationConfig(jdbc_url="jdbc:x", source_schema="DB.SCH", warehouse="./wh", jars=["j.jar"])
+    conf = validate_config(detect_path(tmp_path), cfg, "snowflake")
+    assert conf["tables"] == "auto" and conf["reference"]["kind"] == "snowflake"
+    q = conf["reference"]["queries"]
+    assert q["s"] == ["WITH x AS (SELECT a FROM DB.SCH.t) SELECT a FROM x"]       # CTE name x is not qualified
+    assert len(q["d"]) == 2 and q["d"][1].startswith("SELECT * FROM (VALUES")
+    target = conf["targets"][0]
+    assert target["kind"] == "spark" and target["tables"] == {"s": "lake.db.s", "d": "lake.db.d"} and target["jars"] == ["j.jar"]
+    assert validate_config(detect_path(tmp_path), cfg, "snowflake") == conf

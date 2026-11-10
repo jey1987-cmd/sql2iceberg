@@ -14,6 +14,8 @@ import sqlglot
 from sqlglot import ErrorLevel, exp
 from sqlglot.errors import ParseError
 
+from .rewrites import flatten_to_lateral_view, spark_semantics
+
 # status values
 CONVERTED = "converted"          # no known problems found (still needs verification)
 REVIEW = "review"                # converted, but semantics may differ from Snowflake
@@ -73,6 +75,8 @@ _REVIEW_MESSAGES = {
     "VARIANT_PATH": "VARIANT path access became get_json_object, valid only if the column holds a "
                     "JSON string, not a struct or map.",
     "OBJECT_CONSTRUCT": "OBJECT_CONSTRUCT became STRUCT; null handling and dynamic keys differ.",
+    "FLATTEN_JSON": "LATERAL FLATTEN became LATERAL VIEW EXPLODE over from_json(...). This assumes the column holds a JSON "
+                    "array as text (how VARIANT/ARRAY columns arrive over JDBC); OUTER, KEY and PATH are not supported.",
 }
 
 
@@ -139,8 +143,10 @@ def convert_statement(sql: str, dialect: str = "snowflake") -> Result:
         expr = sqlglot.parse_one(sql, read=dialect)
     except ParseError as exc:
         return Result(sql, None, UNPARSED, [Finding("PARSE", "unsupported", str(exc)[:200])])
+    flattened = False
     if dialect == "snowflake":
-        expr = expr.transform(_keep_try_semantics)
+        expr = expr.transform(_keep_try_semantics).transform(spark_semantics).transform(spark_semantics)  # 2nd pass: nested cases
+        flattened = flatten_to_lateral_view(expr)
     cap = _Capture()
     logger = logging.getLogger("sqlglot")
     logger.addHandler(cap)
@@ -157,6 +163,8 @@ def convert_statement(sql: str, dialect: str = "snowflake") -> Result:
         if pattern.search(spark):
             findings.append(Finding(code, "unsupported", message))
     findings.extend(_source_checks(expr))
+    if flattened:
+        findings.append(Finding("FLATTEN_JSON", "review", _REVIEW_MESSAGES["FLATTEN_JSON"]))
     try:
         sqlglot.parse_one(spark, read="spark")
     except ParseError as exc:

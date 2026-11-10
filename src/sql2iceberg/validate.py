@@ -184,16 +184,71 @@ def _target_from_config(cfg: dict) -> Target:
     raise ValueError(f"unknown target kind {kind!r}: use snowflake, postgres, mysql, mssql, oracle, athena or bigquery")
 
 
-def report_from_config(cfg: dict) -> ValidationReport:
+def _spark_target(cfg: dict, spark=None):
+    """A Spark/Iceberg target. Builds a local session from the config unless one is passed in."""
+    if spark is None:
+        from pyspark.sql import SparkSession
+
+        catalog = cfg.get("catalog", "lake")
+        prefix = f"spark.sql.catalog.{catalog}"
+        builder = (SparkSession.builder.appName("sql2iceberg-validate")
+                   .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions")
+                   .config(prefix, "org.apache.iceberg.spark.SparkCatalog")
+                   .config(f"{prefix}.type", cfg.get("catalog_type", "hadoop"))
+                   .config(f"{prefix}.warehouse", cfg.get("warehouse", "./warehouse")))
+        if cfg.get("jars"):
+            builder = builder.config("spark.jars", ",".join(cfg["jars"]))
+        if cfg.get("packages"):
+            builder = builder.config("spark.jars.packages", ",".join(p for p in cfg["packages"] if p))
+        for key, value in (cfg.get("conf") or {}).items():
+            builder = builder.config(key, value)
+        spark = builder.getOrCreate()
+        spark.sparkContext.setLogLevel("ERROR")
+    run = lambda sql: [tuple(r) for r in spark.sql(sql).collect()]
+    return spark, Target(cfg.get("name", "spark_iceberg"), run, cfg["tables"], CASTS["spark"])
+
+
+_NUMERIC_TYPES = ("byte", "short", "int", "long", "float", "double", "decimal")
+
+
+def report_from_config(cfg: dict, spark=None) -> ValidationReport:
     """Build targets from a plain dict (the CLI's JSON file) and run :func:`validate`.
 
     {"tables": {"orders": ["order_id", {"name": "amount", "numeric": true}]},
      "reference": {"kind": "snowflake", "name": "source", "tables": {"orders": "DB.SCH.ORDERS"}},
      "targets": [{"kind": "athena", ...}, {"kind": "bigquery", ...}]}
+
+    Two conveniences used by the folder ``sql2iceberg pyspark`` writes:
+
+    * a target ``{"kind": "spark", "warehouse": ..., "catalog": "lake", "tables": {"orders": "lake.db.orders"}}`` checks the
+      Iceberg tables with Spark (``spark`` can be an existing session);
+    * ``"tables": "auto"`` takes the columns to check from that Spark target, and a reference with
+      ``"queries": {"orders": ["SELECT ..."]}`` runs your original SELECTs (several are combined with UNION ALL) on the source,
+      so you can compare a generated table with what the SQL returns without creating anything in the source database.
     """
-    columns = {t: [ColumnSpec(c) if isinstance(c, str) else ColumnSpec(c["name"], c.get("numeric", False))
-                   for c in cols] for t, cols in cfg["tables"].items()}
+    spark_session, targets = spark, []
+    for t in cfg["targets"]:
+        if t["kind"] == "spark":
+            spark_session, target = _spark_target(t, spark_session)
+        else:
+            target = _target_from_config(t)
+        targets.append(target)
+    spark_target = next((t for t, c in zip(targets, cfg["targets"], strict=True) if c["kind"] == "spark"), None)
+    if cfg["tables"] == "auto":
+        if spark_target is None:
+            raise ValueError('"tables": "auto" needs a target with "kind": "spark"')
+        columns = {name: [ColumnSpec(f.name, f.dataType.typeName() in _NUMERIC_TYPES)
+                          for f in spark_session.table(qualified).schema.fields]
+                   for name, qualified in spark_target.tables.items()}
+    else:
+        columns = {t: [ColumnSpec(c) if isinstance(c, str) else ColumnSpec(c["name"], c.get("numeric", False))
+                       for c in cols] for t, cols in cfg["tables"].items()}
+    ref_cfg = dict(cfg["reference"])
+    if "queries" in ref_cfg:
+        ref_cfg["tables"] = {
+            table: "(" + " UNION ALL ".join(f"SELECT * FROM ({q})" for q in queries) + ") AS q("
+                   + ", ".join(c.name for c in columns[table]) + ")"
+            for table, queries in ref_cfg.pop("queries").items() if table in columns}
     with span("validate", tables=len(columns)):
-        return validate(columns, _target_from_config(cfg["reference"]),
-                        [_target_from_config(t) for t in cfg["targets"]],
+        return validate(columns, _target_from_config(ref_cfg), targets,
                         rel_tol=cfg.get("rel_tol", 1e-9), abs_tol=cfg.get("abs_tol", 1e-6))
