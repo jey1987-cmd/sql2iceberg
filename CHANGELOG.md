@@ -1,12 +1,48 @@
 # Changelog
 
-## 0.1.0 (first release, alpha)
+All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/),
+and the project uses [Semantic Versioning](https://semver.org/). While the version is below 1.0, minor releases may change behaviour.
 
-- Renamed from the working name `sf2iceberg` to `sql2iceberg`.
-- Detect SQL platform and SQL in `.sql`, `.py`, `.ipynb`; dialect-aware conversion to Spark SQL with safety findings.
-- Connectors: Snowflake (tested live); Postgres, MySQL, SQL Server, Oracle (experimental, mock-tested).
-- PySpark job generator: JDBC ingest to Iceberg, curation SQL, hadoop/jdbc/glue/rest/hive catalogs, S3 and GCS warehouses.
-- Publishers: Snowflake external Iceberg tables, AWS Glue/Athena, BigQuery BigLake. Plan first, `--apply` to change accounts.
-- `validate`: counts, non-null counts and sums across Snowflake, Athena and BigQuery.
-- `--trace` JSONL tracer with secret redaction; `doctor` and `issue` commands.
-- Live-tested on Snowflake, AWS and GCP with Iceberg format-version 2 (see docs/examples.md).
+## [0.1.0] - 2026-11-09
+
+First public release (alpha). Published on PyPI as [`sql2iceberg`](https://pypi.org/project/sql2iceberg/).
+
+### Added
+- **Detection and conversion.** Find SQL in `.sql`, `.py` and `.ipynb` files; guess the source platform from driver imports,
+  connection strings, SQL syntax and environment variables; convert to Spark SQL with SQLGlot (Snowflake, Postgres, MySQL,
+  T-SQL, Oracle dialects) and flag output that cannot run or may behave differently (`converted`, `review`, `unsupported`).
+- **Connectors.** Snowflake (tested live); Postgres, MySQL, SQL Server and Oracle (experimental, mock-tested only). Credentials come
+  from environment variables only.
+- **PySpark job generator.** JDBC read of source tables, write to Iceberg, then the curation SQL with tables pointed at the
+  Iceberg catalog. Catalog types `hadoop`, `jdbc`, `glue`, `rest`, `hive`; S3 and GCS warehouses; Snowflake key-pair login.
+  Generated scripts never contain secrets.
+- **Publishers.** Expose Iceberg tables to Snowflake (external Iceberg tables, reusing or creating the volume and catalog
+  integration), AWS (Glue registration, Athena counts) and GCP (BigQuery BigLake). Every publisher prints a plan first and only
+  changes an account with `--apply`.
+- **Validation.** `sql2iceberg validate` compares row counts, per-column non-null counts and numeric sums across platforms in
+  one batched query per table.
+- **Tracer.** `--trace FILE` writes timed, nested JSONL spans for every command, with secrets redacted.
+- **Support tooling.** `sql2iceberg doctor` checks Java, Spark, packages and certificates; `sql2iceberg issue` opens a GitHub issue
+  pre-filled with environment names and versions (never values). Issue templates, troubleshooting guide, environment and
+  package lists, and worked examples from the live tests are in `docs/`.
+- **pytest plugin** with Spark fixtures (`sql2iceberg[pytest]`).
+
+### Changed
+- Renamed from the working name `sf2iceberg` to `sql2iceberg` (package, CLI, plugin, docs). If you installed the old name,
+  `pip uninstall sf2iceberg` first (see troubleshooting).
+- Default Iceberg format version is 2, the version verified on all three target platforms.
+
+### Verified
+Live run on 2026-11-09 with synthetic data: Snowflake source to Iceberg on S3 (JDBC, key-pair login) and on GCS, exposed to
+Snowflake, AWS Athena and BigQuery. 38 validation checks across 4 tables and 4 platforms matched (20 customers, 100 orders,
+100 order items, 75 curated orders). CI passes on Python 3.10, 3.12 and 3.13 (Linux).
+
+### Known limitations
+- Only Snowflake was exercised as a source. Postgres, MySQL, SQL Server and Oracle are untested.
+- Tested on Iceberg format version 2; v3 support on Snowflake and BigQuery is unverified.
+- BigQuery cannot read an S3 warehouse; the GCP path writes a second copy to GCS.
+- Snowflake object-store tables and BigQuery tables point at one metadata file and need a refresh after new writes.
+- Validation proves counts, non-null counts and sums, not row-by-row equality.
+- Live tests ran on Windows 10 with Python 3.13 only.
+
+[0.1.0]: https://github.com/jey1987-cmd/sql2iceberg/releases/tag/v0.1.0
