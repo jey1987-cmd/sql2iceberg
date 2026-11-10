@@ -156,8 +156,9 @@ one line before passing SQL to the CLI, or use the Python client (`pip install "
 
 ### Iceberg format version 3
 
-Tested on format-version 2. The generator can write version 3 (`--iceberg-version 3`), but Snowflake and BigQuery support for
-reading v3 tables was not verified here; the publishers warn when they see one. Use 2 if a platform rejects the table.
+Format-version 2 was tested on Snowflake, Athena and BigQuery. Version 3 (`--iceberg-version 3`) was verified once: a
+Spark-written v3 table on S3 was read correctly by a Snowflake external Iceberg table (counts and sums matched the managed
+table). Athena and BigQuery on v3 are untested, and the publishers warn when they see a v3 table. Use 2 if a platform rejects it.
 
 ### A script hangs after Spark finishes
 

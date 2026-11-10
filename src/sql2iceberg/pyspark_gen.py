@@ -202,7 +202,7 @@ def _pyspark_pipeline(statements, cfg: MigrationConfig, dialect: str | None = No
         try:
             jdbc_url = conn().jdbc_url()
         except KeyError as exc:
-            raise ValueError(f"set MigrationConfig.jdbc_url or the environment variable {exc.args[0]}") from None
+            raise ValueError(f"pass --jdbc-url (MigrationConfig.jdbc_url in Python), or set the environment variable {exc.args[0]}") from None
     envs = ", ".join(e for e in (conn.jdbc_user_env, conn.jdbc_password_env) if e)
     if conn.jdbc_key_env:
         envs += f" (or {conn.jdbc_key_env} instead of the password)"

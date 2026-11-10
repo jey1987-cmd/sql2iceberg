@@ -141,3 +141,28 @@ def test_validate_config_accepts_rdbms_kinds(monkeypatch):
     rep = v.report_from_config(cfg)
     assert rep.ok and {r.check for r in rep.results} == {"row_count", "non_null:id"}
     assert v.CASTS["postgres"] == "DOUBLE PRECISION"
+
+
+def test_cli_missing_env_prints_clean_error_not_traceback(tmp_path, monkeypatch, capsys):
+    from sql2iceberg.cli import main
+
+    for var in ("PGHOST", "PGDATABASE", "PGUSER", "SQL2ICEBERG_DEBUG"):
+        monkeypatch.delenv(var, raising=False)
+    f = tmp_path / "q.sql"
+    f.write_text("CREATE TABLE t AS SELECT a FROM s;")
+    rc = main(["pyspark", str(f), "--out", str(tmp_path / "o"), "--platform", "postgres", "--catalog-type", "jdbc",
+               "--catalog-uri", "jdbc:sqlite:c.db", "--warehouse", "s3://b/w"])
+    err = capsys.readouterr().err
+    assert rc == 2 and "error:" in err and "PGHOST" in err and "Traceback" not in err
+
+
+def test_cli_debug_env_reraises(tmp_path, monkeypatch):
+    from sql2iceberg.cli import main
+
+    monkeypatch.delenv("PGHOST", raising=False)
+    monkeypatch.setenv("SQL2ICEBERG_DEBUG", "1")
+    f = tmp_path / "q.sql"
+    f.write_text("CREATE TABLE t AS SELECT a FROM s;")
+    with pytest.raises(ValueError):
+        main(["pyspark", str(f), "--out", str(tmp_path / "o"), "--platform", "postgres", "--catalog-type", "jdbc",
+              "--catalog-uri", "jdbc:sqlite:c.db", "--warehouse", "s3://b/w"])

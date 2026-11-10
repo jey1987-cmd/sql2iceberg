@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -274,6 +275,12 @@ def main(argv: list[str] | None = None) -> int:
         with span(f"cli.{cmd}") as sp:
             rc = _main(rest)
             sp.set(exit_code=rc)
+    except (ValueError, KeyError, FileNotFoundError, RuntimeError) as exc:
+        if os.environ.get("SQL2ICEBERG_DEBUG"):
+            raise  # full traceback for bug reports
+        what = f"missing required setting {exc.args[0]!r}" if isinstance(exc, KeyError) and exc.args else str(exc)
+        print(f"error: {what}\n(set SQL2ICEBERG_DEBUG=1 for the full traceback)", file=sys.stderr)
+        rc = 2
     finally:
         if tracer:
             print(tracer.summary(), file=sys.stderr)

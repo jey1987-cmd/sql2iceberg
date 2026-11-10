@@ -111,8 +111,9 @@ class SnowflakePublisher(Publisher):
         t = self.t
         res = PublishResult()
         if any(tb.format_version >= 3 for tb in tables):
-            res.warnings.append("Some tables are Iceberg format-version 3. Check the current Snowflake docs for "
-                                "v3 support in externally managed tables; use --iceberg-version 2 if unsure.")
+            res.warnings.append("Some tables are Iceberg format-version 3. One Spark-written v3 table was read correctly by a Snowflake "
+                                "external Iceberg table over S3 in one test; other setups are untested. "
+                                "Use --iceberg-version 2 if Snowflake rejects the table.")
         if t.mode == "object_store":
             res.warnings.append("object_store mode points at a fixed metadata file. Re-run after each write "
                                 "(ALTER ICEBERG TABLE ... REFRESH 'new/metadata.json') or use glue mode.")

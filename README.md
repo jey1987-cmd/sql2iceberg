@@ -146,7 +146,7 @@ script, report = pyspark_pipeline(stmts, MigrationConfig(platform="snowflake", w
 
 - Only **Snowflake as a source** and **Snowflake, AWS Glue/Athena, BigQuery as targets** were run against real systems.
   Postgres, MySQL, SQL Server and Oracle connectors, REST/Hive catalogs, Spark 3.5, Azure and Databricks are untested.
-- Tested with Iceberg **format-version 2**. Whether Snowflake and BigQuery read v3 tables is unverified here.
+- Iceberg format-version **2** was tested on all three targets. **Version 3** was verified in one case: a Spark-written v3 table read by a Snowflake external Iceberg table over S3 (counts and sums matched). Athena and BigQuery on v3 are untested.
 - BigQuery cannot read an S3 warehouse. The GCP path writes a second Iceberg copy to GCS.
 - Snowflake object-store tables and BigQuery tables point at one metadata file (a snapshot): refresh after new writes.
 - Validation compares counts, non-null counts and sums. It does not compare every row.

@@ -3,6 +3,17 @@
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/),
 and the project uses [Semantic Versioning](https://semver.org/). While the version is below 1.0, minor releases may change behaviour.
 
+## [0.1.3] - 2026-11-10
+
+### Fixed
+- Command-line errors from missing settings (for example `PGHOST` not set, or a missing key in a publish or validate config) now print a
+  one-line `error: ...` message and exit with status 2 instead of a Python traceback. Set `SQL2ICEBERG_DEBUG=1` to get the traceback.
+
+### Documentation
+- Corrected the Iceberg v3 statements. Format-version 2 was tested on Snowflake, Athena and BigQuery. Version 3 was also verified
+  once: a Spark-written v3 table on S3 was read by a Snowflake external Iceberg table, and counts and sums matched the managed table.
+  Athena and BigQuery on v3 remain untested. The Snowflake publisher's v3 warning now says this.
+
 ## [0.1.2] - 2026-11-10
 
 ### Fixed
@@ -73,6 +84,7 @@ Snowflake, AWS Athena and BigQuery. 38 validation checks across 4 tables and 4 p
 - Validation proves counts, non-null counts and sums, not row-by-row equality.
 - Live tests ran on Windows 10 with Python 3.13 only.
 
+[0.1.3]: https://github.com/jey1987-cmd/sql2iceberg/releases/tag/v0.1.3
 [0.1.2]: https://github.com/jey1987-cmd/sql2iceberg/releases/tag/v0.1.2
 [0.1.1]: https://github.com/jey1987-cmd/sql2iceberg/releases/tag/v0.1.1
 [0.1.0]: https://github.com/jey1987-cmd/sql2iceberg/releases/tag/v0.1.0
